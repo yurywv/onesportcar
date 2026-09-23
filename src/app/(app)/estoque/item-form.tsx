@@ -6,7 +6,7 @@ import { saveItem } from "./actions";
 
 export const CATEGORY_LABEL: Record<string, string> = { PECAS: "Peças", OLEOS: "Óleos", FLUIDOS: "Fluidos", FILTROS: "Filtros", PNEUS: "Pneus", QUIMICOS: "Produtos químicos", CONSUMIVEIS: "Consumíveis", ACESSORIOS: "Acessórios" };
 
-export function ItemForm({ item }: { item?: InventoryItem }) {
+export function ItemForm({ item, suppliers = [] }: { item?: InventoryItem; suppliers?: { id: string; name: string }[] }) {
   return (
     <ActionForm action={saveItem} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" reset={!item}>
       {item && <input type="hidden" name="id" value={item.id} />}
@@ -21,6 +21,7 @@ export function ItemForm({ item }: { item?: InventoryItem }) {
       <Field label="Preço de venda (R$)"><input name="price" className="input" inputMode="decimal" defaultValue={item ? centsToInput(item.price) : ""} /></Field>
       <Field label="Mínimo"><input name="minQty" className="input" inputMode="decimal" defaultValue={item?.minQty ?? 0} /></Field>
       <Field label="Máximo"><input name="maxQty" className="input" inputMode="decimal" defaultValue={item?.maxQty ?? ""} /></Field>
+      <Field label="Fornecedor preferencial"><select name="supplierId" className="select" defaultValue={item?.supplierId ?? ""}><option value="">—</option>{suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
       <div className="flex items-end"><Submit>{item ? "Salvar" : "Cadastrar item"}</Submit></div>
     </ActionForm>
   );

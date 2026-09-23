@@ -14,12 +14,15 @@ prisma/
   schema.prisma          modelo de dados (valores em centavos, tempos em minutos)
   migrations/            inclui triggers de imutabilidade (auditoria, histórico, aprovações, versões, estoque)
   seed.ts                dados FICTÍCIOS de demonstração (percorre o fluxo real via regras de domínio)
+  seed-supply.ts         fornecedores, pedidos e tesouraria fictícios (pode rodar sobre um banco já semeado)
   create-admin.ts        inicializa produção vazia com 1 administrador
 src/lib/
   workflow.ts            máquina de estados da OS + pré-condições (validadas no servidor)
   estimate.ts            orçamento: snapshot imutável, versões, link de aprovação, decisões, materialização na OS
   inventory.ts           estoque: custo médio ponderado, reserva, baixa, devolução, bloqueio de negativo
   wo.ts                  apontamento de horas e totais/margem da OS
+  purchasing.ts          compras: sugestão, alçada, aprovação, recebimento parcial, rateio de frete, contas a pagar
+  finance.ts             tesouraria: títulos/parcelas, baixas imutáveis, estorno, saldos, transferências, recebimento e faturamento da OS
   auth.ts / rbac.ts      sessão (cookie HttpOnly, hash no banco), bloqueio por tentativas, permissões por perfil
   audit.ts               log de auditoria append-only
   validators.ts          CPF, CNPJ alfanumérico, placa antiga/Mercosul, VIN, RENAVAM
@@ -36,7 +39,7 @@ npx prisma migrate deploy
 SEED_PASSWORD='SuaSenhaDemo123' npm run db:seed-demo
 npm run dev
 ```
-Os usuários de demonstração são `admin@`, `gestor@`, `consultor@`, `tecnico@`, `tecnico2@`, `estoque@`, `financeiro@` e `auditor@onesportcar.demo`. A senha é a definida em `SEED_PASSWORD`.
+Os usuários de demonstração são `admin@`, `gestor@`, `consultor@`, `tecnico@`, `tecnico2@`, `estoque@`, `compras@`, `financeiro@` e `auditor@onesportcar.demo`. A senha é a definida em `SEED_PASSWORD`.
 
 ## Testes
 ```bash

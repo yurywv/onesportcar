@@ -90,10 +90,10 @@ async function precondition(tx: Tx, woId: string, to: WorkOrderStatus): Promise<
     }
     case "CANCELADA": {
       const [paid, applied] = await Promise.all([
-        tx.payment.count({ where: { workOrderId: woId, status: "CONFIRMADO" } }),
+        tx.title.count({ where: { workOrderId: woId, settled: { gt: 0 } } }),
         tx.workOrderPart.count({ where: { workOrderId: woId, status: "APLICADA", inventoryItemId: { not: null } } }),
       ]);
-      if (paid) return "OS com pagamento registrado não pode ser cancelada. Estorne os pagamentos primeiro.";
+      if (paid) return "OS com recebimento registrado não pode ser cancelada. Estorne as baixas no Financeiro primeiro.";
       if (applied) return "Devolva ao estoque as peças já aplicadas antes de cancelar.";
       return null;
     }
@@ -121,6 +121,7 @@ export async function transition(tx: Tx, woId: string, to: WorkOrderStatus, user
 
   if (to === "CANCELADA") {
     await tx.workOrderPart.updateMany({ where: { workOrderId: woId, status: { in: ["RESERVADA", "AGUARDANDO_COMPRA"] } }, data: { status: "CANCELADA" } });
+    await tx.title.updateMany({ where: { workOrderId: woId, status: "ABERTO" }, data: { status: "CANCELADO", cancelReason: `OS cancelada: ${opts.reason}` } });
   }
   const updated = await tx.workOrder.update({
     where: { id: woId },

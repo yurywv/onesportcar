@@ -19,7 +19,7 @@ export async function saveItem(_: ActionState, fd: FormData): Promise<ActionStat
     const data = {
       sku: req(fd, "sku", "SKU").toUpperCase(), name: req(fd, "name", "Descrição"), oemCode: str(fd, "oemCode"), mfrCode: str(fd, "mfrCode"),
       brand: str(fd, "brand"), category, unit: str(fd, "unit")?.toUpperCase() ?? "UN", location: str(fd, "location"),
-      price: parseMoney(fd.get("price")), minQty: num(fd, "minQty") ?? 0, maxQty: num(fd, "maxQty"),
+      price: parseMoney(fd.get("price")), minQty: num(fd, "minQty") ?? 0, maxQty: num(fd, "maxQty"), supplierId: str(fd, "supplierId"),
     };
     await db.$transaction(async (tx) => {
       if (id) {

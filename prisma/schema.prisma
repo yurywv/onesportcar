@@ -135,6 +135,7 @@ model Customer {
   ownerships   VehicleOwnership[]
   workOrders   WorkOrder[]
   appointments Appointment[]
+  titles       Title[]
 
   @@index([name])
   @@index([phone])
@@ -343,7 +344,8 @@ model WorkOrder {
   timeEntries    TimeEntry[]
   qualityChecks  QualityControl[]
   checkOut       CheckOut?
-  payments       Payment[]
+  titles         Title[]
+  purchaseOrders PurchaseOrder[]
 
   @@index([status])
   @@index([customerId])
@@ -668,21 +670,6 @@ model CheckOut {
   createdAt      DateTime  @default(now())
 }
 
-model Payment {
-  id          String    @id @default(uuid())
-  number      String    @unique
-  workOrderId String
-  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
-  method      String // PIX, DINHEIRO, DEBITO, CREDITO, BOLETO, TRANSFERENCIA
-  installments Int      @default(1)
-  amount      Int // centavos
-  reference   String?
-  status      String    @default("CONFIRMADO") // CONFIRMADO, ESTORNADO
-  reversedReason String?
-  userId      String
-  userName    String
-  createdAt   DateTime  @default(now())
-}
 
 // ───────────────────────── Estoque ─────────────────────────
 
@@ -707,6 +694,9 @@ model InventoryItem {
 
   movements InventoryMovement[]
   parts     WorkOrderPart[]
+  poItems   PurchaseOrderItem[]
+  supplierId String?
+  supplier   Supplier?  @relation(fields: [supplierId], references: [id])
 
   @@index([name])
   @@index([oemCode])
@@ -731,6 +721,269 @@ model InventoryMovement {
   createdAt    DateTime      @default(now())
 
   @@index([itemId, createdAt])
+}
+
+// ───────────────────────── Compras e fornecedores ─────────────────────────
+
+model Supplier {
+  id           String   @id @default(uuid())
+  type         PersonType @default(PJ)
+  document     String   @unique // CNPJ (alfanumérico) ou CPF
+  name         String // razão social
+  tradeName    String?
+  ie           String?
+  contactName  String?
+  phone        String?
+  whatsapp     String?
+  email        String?
+  cep          String?
+  street       String?
+  number       String?
+  district     String?
+  city         String?
+  uf           String?
+  specialties  String?
+  brands       String?
+  paymentTerms String? // padrão: "30" ou "30/60/90" (dias)
+  leadTimeDays Int?
+  rating       Int? // 1–5
+  notes        String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  items          InventoryItem[]
+  purchaseOrders PurchaseOrder[]
+  titles         Title[]
+
+  @@index([name])
+}
+
+enum PurchaseStatus {
+  RASCUNHO
+  AGUARDANDO_APROVACAO
+  APROVADO
+  ENVIADO
+  RECEBIDO_PARCIAL
+  RECEBIDO
+  CANCELADO
+}
+
+model PurchaseOrder {
+  id           String         @id @default(uuid())
+  number       String         @unique
+  branchId     String
+  supplierId   String
+  supplier     Supplier       @relation(fields: [supplierId], references: [id])
+  workOrderId  String?
+  workOrder    WorkOrder?     @relation(fields: [workOrderId], references: [id])
+  status       PurchaseStatus @default(RASCUNHO)
+  expectedAt   DateTime?
+  paymentTerms String         @default("30")
+  freight      Int            @default(0) // centavos
+  notes        String?
+  createdById  String
+  createdByName String
+  approvedById String?
+  approvedByName String?
+  approvedAt   DateTime?
+  sentAt       DateTime?
+  cancelReason String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  items    PurchaseOrderItem[]
+  receipts GoodsReceipt[]
+  titles   Title[]
+
+  @@index([status])
+  @@index([supplierId])
+}
+
+model PurchaseOrderItem {
+  id              String        @id @default(uuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  description     String
+  quantity        Float
+  unitCost        Int // centavos
+  receivedQty     Float         @default(0)
+  sortOrder       Int           @default(0)
+
+  receiptItems GoodsReceiptItem[]
+}
+
+// IMUTÁVEL
+model GoodsReceipt {
+  id              String        @id @default(uuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  invoiceNumber   String? // NF do fornecedor
+  invoiceDate     DateTime?
+  freight         Int           @default(0)
+  total           Int // mercadorias + frete (centavos)
+  notes           String?
+  userId          String
+  userName        String
+  createdAt       DateTime      @default(now())
+
+  items GoodsReceiptItem[]
+}
+
+// IMUTÁVEL
+model GoodsReceiptItem {
+  id         String            @id @default(uuid())
+  receiptId  String
+  receipt    GoodsReceipt      @relation(fields: [receiptId], references: [id])
+  poItemId   String
+  poItem     PurchaseOrderItem @relation(fields: [poItemId], references: [id])
+  quantity   Float
+  unitCost   Int // custo unitário efetivo (com rateio de frete)
+}
+
+// ───────────────────────── Financeiro / tesouraria ─────────────────────────
+
+enum AccountType {
+  CAIXA
+  BANCO
+  ADQUIRENTE
+}
+
+model FinancialAccount {
+  id             String      @id @default(uuid())
+  name           String
+  type           AccountType
+  bank           String?
+  agency         String?
+  accountNumber  String?
+  openingBalance Int         @default(0)
+  openingDate    DateTime    @default(now())
+  active         Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+
+  settlements   Settlement[]
+  transfersOut  Transfer[]   @relation("TransferFrom")
+  transfersIn   Transfer[]   @relation("TransferTo")
+}
+
+enum CategoryKind {
+  RECEITA
+  DESPESA
+}
+
+model FinancialCategory {
+  id     String       @id @default(uuid())
+  code   String       @unique
+  name   String
+  kind   CategoryKind
+  active Boolean      @default(true)
+  titles Title[]
+}
+
+model CostCenter {
+  id     String  @id @default(uuid())
+  code   String  @unique
+  name   String
+  active Boolean @default(true)
+  titles Title[]
+}
+
+enum TitleKind {
+  RECEBER
+  PAGAR
+}
+
+enum TitleStatus {
+  ABERTO
+  PARCIAL
+  PAGO
+  CANCELADO
+}
+
+model Title {
+  id              String         @id @default(uuid())
+  number          String         @unique
+  kind            TitleKind
+  status          TitleStatus    @default(ABERTO)
+  description     String
+  customerId      String?
+  customer        Customer?      @relation(fields: [customerId], references: [id])
+  supplierId      String?
+  supplier        Supplier?      @relation(fields: [supplierId], references: [id])
+  counterparty    String? // nome livre quando não há cadastro (ex.: concessionária de energia)
+  workOrderId     String?
+  workOrder       WorkOrder?     @relation(fields: [workOrderId], references: [id])
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  goodsReceiptId  String?
+  categoryId      String
+  category        FinancialCategory @relation(fields: [categoryId], references: [id])
+  costCenterId    String?
+  costCenter      CostCenter?    @relation(fields: [costCenterId], references: [id])
+  document        String? // NF, boleto, contrato
+  method          String? // forma prevista
+  installment     Int            @default(1)
+  installments    Int            @default(1)
+  issueDate       DateTime       @default(now())
+  competence      DateTime       @default(now())
+  dueDate         DateTime
+  amount          Int // valor original (centavos)
+  settled         Int            @default(0) // abatido (principal + desconto) — derivado das baixas
+  cancelReason    String?
+  notes           String?
+  createdById     String
+  createdByName   String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  settlements Settlement[]
+
+  @@index([kind, status, dueDate])
+  @@index([workOrderId])
+}
+
+// IMUTÁVEL — estorno é um novo lançamento com valores negativos (reversalOfId)
+model Settlement {
+  id           String           @id @default(uuid())
+  number       String           @unique
+  titleId      String
+  title        Title            @relation(fields: [titleId], references: [id])
+  accountId    String
+  account      FinancialAccount @relation(fields: [accountId], references: [id])
+  date         DateTime
+  amount       Int // principal abatido
+  interest     Int              @default(0) // juros/multa
+  discount     Int              @default(0) // desconto (abate o título sem movimentar caixa)
+  fee          Int              @default(0) // taxa/tarifa (cartão, boleto)
+  cash         Int // efeito no saldo da conta: + entrada, − saída
+  method       String
+  installments Int              @default(1)
+  reference    String?
+  reversalOfId String?          @unique
+  reason       String?
+  userId       String
+  userName     String
+  createdAt    DateTime         @default(now())
+
+  @@index([accountId, date])
+  @@index([titleId])
+}
+
+// IMUTÁVEL
+model Transfer {
+  id            String           @id @default(uuid())
+  fromAccountId String
+  fromAccount   FinancialAccount @relation("TransferFrom", fields: [fromAccountId], references: [id])
+  toAccountId   String
+  toAccount     FinancialAccount @relation("TransferTo", fields: [toAccountId], references: [id])
+  date          DateTime
+  amount        Int
+  description   String?
+  userId        String
+  userName      String
+  createdAt     DateTime         @default(now())
 }
 
 // ───────────────────────── Auditoria ─────────────────────────

@@ -20,13 +20,16 @@ Hospedagem: Vercel (time Govertech, região `gru1` São Paulo) · Banco: Neon Po
 | Execução | Apontamento iniciar/pausar/aguardando peça/finalizar, um apontamento aberto por técnico, tempo vendido × trabalhado |
 | Estoque | Itens com OEM/local/mín/máx, **custo médio ponderado móvel**, reserva na aprovação, "aguardando compra" quando falta, reserva automática quando a entrada chega, baixa ao custo do momento, devolução, ajuste com motivo, **estoque negativo bloqueado**, movimentos imutáveis |
 | Qualidade | Checklist de CQ, teste de rodagem com autorização, **segregação** (quem executou não faz o CQ), reprovação reabre serviços escolhidos |
-| Pagamento e entrega | Registro de pagamentos (PIX, cartão, dinheiro etc.) com estorno; check-out com km, combustível, recomendações, assinatura e hash; **entrega bloqueada com saldo em aberto**, salvo liberação do gestor com motivo |
+| Pagamento e entrega | Recebimento no balcão (vira título + baixa na tesouraria) ou faturamento a prazo em parcelas; check-out com km, combustível, recomendações, assinatura e hash; **entrega bloqueada com valor não recebido nem faturado**, salvo liberação do gestor com motivo |
+| Fornecedores | CNPJ (alfanumérico)/CPF, contatos, especialidades, marcas, condição de pagamento padrão, prazo prometido × prazo real medido, avaliação, histórico de pedidos e títulos, itens com fornecedor preferencial |
+| Compras | Sugestão de compra (peças de OS aguardando + itens abaixo do mínimo, descontando o que já foi pedido); pedido com itens do estoque, frete, condição 30/60/90, vínculo com OS; **alçada** (comprador até R$ 5.000; acima exige gestor, e quem criou não aprova); envio ao fornecedor com PDF; **recebimento parcial** com NF, frete rateado no custo, entrada no estoque, **contas a pagar geradas pelas parcelas** e **OS aguardando peça liberada automaticamente**; recebimentos imutáveis |
+| Tesouraria | Contas (caixa, banco, adquirente) com saldo inicial; títulos a receber/pagar com parcelas, categoria, centro de custo, competência e documento; **baixas imutáveis** com juros, desconto e taxa; **estorno por lançamento inverso**; prorrogação e cancelamento com motivo; caixa não fica negativo; transferências; extrato com saldo acumulado; painel com saldos, vencidos, **fluxo de caixa previsto** (7–90 dias, alerta de saldo negativo) e realizado do mês por categoria |
 | Rastreabilidade | Painel na OS responde às perguntas da spec §24 (quem trouxe, km, avarias, diagnóstico, versões, quem aprovou, quem executou, tempo, peças, CQ, valores, margem, quem retirou) |
 | Auditoria | Log append-only (UPDATE/DELETE bloqueados por trigger) de login, cadastros, preços, descontos, estoque, aprovações, status, pagamentos e permissões, com visualizador e filtros |
 | Busca global | Placa (com ou sem hífen), cliente, CPF/CNPJ, telefone, nº de OS/orçamento, SKU/OEM, respeitando o perfil |
 | Segurança | CSP, HSTS, X-Frame-Options, nosniff, Referrer-Policy; server actions com proteção de origem; senhas bcrypt (custo 12); `noindex` |
 
-**Testes automatizados:** 9 testes (validadores, RBAC e o fluxo crítico completo de ponta a ponta com banco real, incluindo aprovação parcial, falta de peça, orçamento complementar, reprovação de CQ, imutabilidade, estoque negativo e numeração concorrente). Todos passando.
+**Testes automatizados:** 13 testes com banco real — validadores, RBAC, fluxo crítico da OS de ponta a ponta, compras (alçada, segregação, recebimento parcial, rateio de frete, custo médio, contas a pagar, liberação da OS) e tesouraria (baixas parciais, juros/desconto/taxa, estorno, saldos, bloqueio de caixa negativo, faturamento e recebimento da OS). Todos passando.
 
 ## 2. Desvios em relação à especificação (decisões tomadas para o MVP)
 
@@ -43,8 +46,9 @@ Hospedagem: Vercel (time Govertech, região `gru1` São Paulo) · Banco: Neon Po
 
 - **Fotos e vídeos** no check-in/checklist: precisa de storage (Vercel Blob ou S3 em região BR). Hoje há o aviso "não configurado" na tela.
 - **Fiscal** (NFS-e/NF-e, CBS/IBS): Fase 4, depende das decisões A1–A6 da contabilidade.
-- **Financeiro completo** (contas a pagar/receber, caixa, conciliação, DRE, comissões, taxas de cartão).
-- **Compras e fornecedores**, **ferramentas**, **garantias/retornos** (o modelo já tem campos para OS de retorno).
+- **Financeiro — o que ainda falta:** conciliação bancária (OFX/Open Finance), PIX/boleto gerados por API bancária, taxas automáticas por bandeira/parcela, antecipação de recebíveis, fechamento de caixa diário, comissões e DRE por competência.
+- **Compras — o que ainda falta:** cotação com comparação de fornecedores, importação do XML da NF-e de entrada e devolução ao fornecedor.
+- **Ferramentas** e **garantias/retornos** (o modelo já tem campos para OS de retorno).
 - **WhatsApp/e-mail/SMS e automações**: as telas avisam "canal não configurado"; nada é enviado.
 - **Portal do cliente com conta/PWA**, NPS e pós-venda.
 - **Relatórios/BI** com exportação CSV/XLSX/PDF.

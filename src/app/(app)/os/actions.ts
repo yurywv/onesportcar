@@ -15,6 +15,7 @@ import { fromLocalInput, parseMoney, money } from "@/lib/format";
 import { sendEstimate, recordDecisions, createApprovalLink, lineGross, type Snapshot } from "@/lib/estimate";
 import { applyPart, returnPart } from "@/lib/inventory";
 import { startTimer, stopTimer, woTotals } from "@/lib/wo";
+import { receiveOnWorkOrder, billWorkOrder, parseTerms } from "@/lib/finance";
 import { CHECKIN_CONDITIONS, INSPECTION_TEMPLATES, QC_ITEMS } from "@/lib/checklists";
 
 const refresh = (id: string) => { revalidatePath(`/os/${id}`); revalidatePath("/oficina/kanban"); };
@@ -429,44 +430,35 @@ export async function submitQC(_: ActionState, fd: FormData): Promise<ActionStat
 // ───────────── Pagamento e check-out ─────────────
 
 async function totalsFor(woId: string) {
-  const wo = await db.workOrder.findUniqueOrThrow({ where: { id: woId }, include: { services: true, parts: true, payments: true, timeEntries: true } });
+  const wo = await db.workOrder.findUniqueOrThrow({ where: { id: woId }, include: { services: true, parts: true, titles: true, timeEntries: true } });
   return { wo, t: woTotals({ ...wo, techCost: new Map() }) };
 }
 
+/** Recebimento no balcão: baixa os títulos da OS (ou cria à vista) na conta escolhida. */
 export async function registerPayment(_: ActionState, fd: FormData): Promise<ActionState> {
   return run(async () => {
     const user = await assertUser("pagamentos:registrar");
     const woId = String(fd.get("workOrderId"));
-    const { wo, t } = await totalsFor(woId);
-    if (wo.status === "CANCELADA") throw new RuleError("OS cancelada.");
     const amount = parseMoney(fd.get("amount"));
-    if (amount <= 0) throw new RuleError("Valor inválido.");
-    if (amount > t.due) throw new RuleError(`Valor maior que o saldo em aberto (${money(t.due)}).`);
-    const method = req(fd, "method", "Forma de pagamento");
-    await db.$transaction(async (tx) => {
-      const p = await tx.payment.create({
-        data: { number: await nextNumber(tx, wo.branchId, "REC"), workOrderId: woId, method, amount, installments: int(fd, "installments") ?? 1, reference: str(fd, "reference"), userId: user.id, userName: user.name },
-      });
-      await audit({ action: "PAYMENT", entity: "Payment", entityId: p.id, userId: user.id, userName: user.name, after: { workOrderId: woId, amount, method }, ...(await requestMeta()) }, tx);
-    });
+    const numbers = await db.$transaction((tx) => receiveOnWorkOrder(tx, user, {
+      workOrderId: woId, amount, accountId: req(fd, "accountId", "Conta de destino"), method: req(fd, "method", "Forma de pagamento"),
+      installments: int(fd, "installments") ?? 1, fee: parseMoney(fd.get("fee")), reference: str(fd, "reference"),
+    }));
     refresh(woId);
-    return `Pagamento de ${money(amount)} registrado. (Emissão fiscal: módulo Fiscal ainda não implementado — Fase 4.)`;
+    return `Recebimento de ${money(amount)} registrado (${numbers.join(", ")}). (Emissão fiscal: módulo Fiscal ainda não implementado.)`;
   });
 }
 
-export async function reversePayment(_: ActionState, fd: FormData): Promise<ActionState> {
+/** Faturamento a prazo (boleto/PIX com vencimento) do valor ainda não faturado da OS. */
+export async function billWorkOrderAction(_: ActionState, fd: FormData): Promise<ActionState> {
   return run(async () => {
-    const user = await assertUser("pagamentos:estornar");
-    const p = await db.payment.findUniqueOrThrow({ where: { id: String(fd.get("paymentId")) }, include: { workOrder: true } });
-    if (p.status !== "CONFIRMADO") throw new RuleError("Pagamento já estornado.");
-    if (p.workOrder.status === "ENTREGUE") throw new RuleError("OS entregue: estornos após a entrega devem ser tratados no Financeiro (Fase 4).");
-    const reason = req(fd, "reason", "Motivo do estorno");
-    await db.$transaction(async (tx) => {
-      await tx.payment.update({ where: { id: p.id }, data: { status: "ESTORNADO", reversedReason: reason } });
-      await audit({ action: "REVERSE", entity: "Payment", entityId: p.id, userId: user.id, userName: user.name, before: { status: "CONFIRMADO" }, after: { status: "ESTORNADO", reason } }, tx);
-    });
-    refresh(p.workOrderId);
-    return "Pagamento estornado.";
+    const user = await assertUser("financeiro:lancar");
+    const woId = String(fd.get("workOrderId"));
+    const titles = await db.$transaction((tx) => billWorkOrder(tx, user, {
+      workOrderId: woId, dueDays: parseTerms(str(fd, "terms") ?? "30"), method: req(fd, "method", "Forma de cobrança"), document: str(fd, "document"),
+    }));
+    refresh(woId);
+    return `Faturado em ${titles.length} parcela(s): ${titles.map((t) => `${t.number} (${money(t.amount)})`).join(", ")}.`;
   });
 }
 
@@ -484,8 +476,8 @@ export async function checkOut(_: ActionState, fd: FormData): Promise<ActionStat
     if (fuel === null || fuel < 0 || fuel > 100) throw new RuleError("Nível de combustível/carga inválido.");
     const release = bool(fd, "releaseWithoutPayment");
     const releaseReason = str(fd, "releaseReason");
-    if (t.due > 0) {
-      if (!release) throw new RuleError(`Há saldo em aberto de ${money(t.due)}. Registre o pagamento ou solicite liberação ao gestor.`);
+    if (t.unbilled > 0) {
+      if (!release) throw new RuleError(`Há ${money(t.unbilled)} não recebidos nem faturados. Registre o recebimento, fature a prazo ou solicite liberação ao gestor.`);
       if (!can(user.role, "os:liberar_sem_pagamento")) throw new RuleError("Somente gestor pode liberar a entrega sem pagamento.");
       if (!releaseReason) throw new RuleError("Informe o motivo da liberação sem pagamento.");
     }
@@ -496,7 +488,7 @@ export async function checkOut(_: ActionState, fd: FormData): Promise<ActionStat
     const content = {
       workOrderId: woId, km: kmOut, fuelLevel: fuel, receivedBy: signedName, receivedByRelation: str(fd, "relation") ?? "TITULAR",
       finalCondition: str(fd, "finalCondition"), recommendations: str(fd, "recommendations"), removedPartsReturned: bool(fd, "removedPartsReturned"),
-      releasedWithoutPayment: t.due > 0 && release, releaseReason: t.due > 0 ? releaseReason : null,
+      releasedWithoutPayment: t.unbilled > 0 && release, releaseReason: t.unbilled > 0 ? releaseReason : null,
     };
     await db.$transaction(async (tx) => {
       const co = await tx.checkOut.create({

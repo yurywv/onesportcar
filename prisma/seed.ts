@@ -8,6 +8,8 @@ import { stockEntry, applyPart } from "../src/lib/inventory";
 import { startTimer, stopTimer } from "../src/lib/wo";
 import { nextNumber } from "../src/lib/sequence";
 import type { SessionUser } from "../src/lib/auth";
+import { receiveOnWorkOrder } from "../src/lib/finance";
+import { seedSupply } from "./seed-supply";
 
 const db = new PrismaClient();
 
@@ -53,6 +55,7 @@ async function main() {
     ["Técnico Bruno Demo", "tecnico@onesportcar.demo", "TECNICO", { specialties: "Motor, diagnóstico eletrônico, alta tensão", level: "Master", hourlyRate: 42000, hourlyCost: 12000 }],
     ["Técnica Carla Demo", "tecnico2@onesportcar.demo", "TECNICO", { specialties: "Freios, suspensão, transmissão", level: "Sênior", hourlyRate: 38000, hourlyCost: 10000 }],
     ["Estoquista Demo", "estoque@onesportcar.demo", "ESTOQUISTA"],
+    ["Comprador Demo", "compras@onesportcar.demo", "COMPRADOR"],
     ["Financeiro Demo", "financeiro@onesportcar.demo", "FINANCEIRO"],
     ["Auditor Demo", "auditor@onesportcar.demo", "AUDITOR"],
   ];
@@ -229,7 +232,7 @@ async function main() {
   const wo1 = await db.workOrder.findUniqueOrThrow({ where: { id: w1.id }, include: { services: true, parts: true } });
   const total1 = wo1.services.reduce((s, x) => s + x.price, 0) + wo1.parts.filter((p) => p.status === "APLICADA").reduce((s, x) => s + x.price, 0);
   await db.$transaction(async (tx) => {
-    await tx.payment.create({ data: { number: await nextNumber(tx, branch.id, "REC"), workOrderId: w1.id, method: "PIX", amount: total1, userId: consultor.id, userName: consultor.name } });
+    await receiveOnWorkOrder(tx, consultor, { workOrderId: w1.id, amount: total1, accountId: "00000000-0000-4000-8000-000000000002", method: "PIX", reference: "E2E demo" });
     await tx.checkOut.create({ data: { workOrderId: w1.id, km: vehicles[0].mileage + 128, fuelLevel: 55, receivedBy: "Titular (fictício)", receivedByRelation: "TITULAR", recommendations: "Trocar discos dianteiros em ~8.000 km", removedPartsReturned: true, deliveredById: consultor.id, deliveredByName: consultor.name, signedName: "Titular (fictício)", signatureData: "", contentHash: "seed" } });
     await transition(tx, w1.id, "ENTREGUE", consultor, { reason: "Check-out assinado" });
   });
@@ -274,6 +277,8 @@ async function main() {
       data: { branchId: branch.id, customerId: vehicles[vi].customerId, vehicleId: vehicles[vi].id, startsAt: new Date(today.getTime() + h * 3600_000), durationMin: 120, services: s, consultantId: consultor.id, createdById: consultor.id, bayId: bays[vi % 4].id },
     });
   }
+
+  await seedSupply(db, PASSWORD!);
 
   console.log("Seed concluído. Usuários de demonstração (senha = SEED_PASSWORD):");
   for (const [, email, role] of people) console.log(`  ${role.padEnd(11)} ${email}`);

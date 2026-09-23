@@ -19,9 +19,10 @@ export default async function Stock({ searchParams }: { searchParams: Promise<{ 
     active: true, category: sp.cat || undefined,
     ...(q && { OR: [{ sku: { contains: q, mode: "insensitive" } }, { name: { contains: q, mode: "insensitive" } }, { oemCode: { contains: q, mode: "insensitive" } }, { mfrCode: { contains: q, mode: "insensitive" } }] }),
   };
-  const [allItems, reserved] = await Promise.all([
+  const [allItems, reserved, suppliers] = await Promise.all([
     db.inventoryItem.findMany({ where, orderBy: { name: "asc" } }),
     db.workOrderPart.groupBy({ by: ["inventoryItemId"], where: { status: "RESERVADA" }, _sum: { quantity: true } }),
+    db.supplier.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
   const res = new Map(reserved.map((r) => [r.inventoryItemId, r._sum.quantity ?? 0]));
   const filtered = sp.critico ? allItems.filter((i) => i.onHand < i.minQty) : allItems;
@@ -33,14 +34,14 @@ export default async function Stock({ searchParams }: { searchParams: Promise<{ 
 
   return (
     <>
-      <PageHeader title="Estoque" subtitle="Saldo é consequência das movimentações; custo médio ponderado móvel" actions={edit && <Link href="?novo=1" className="btn btn-primary">Novo item</Link>} />
+      <PageHeader title="Estoque" subtitle="Saldo é consequência das movimentações; custo médio ponderado móvel" actions={<>{can(user.role, "compras:ver") && <Link href="/compras/sugestoes" className="btn">Sugestões de compra</Link>}{edit && <Link href="?novo=1" className="btn btn-primary">Novo item</Link>}</>} />
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Itens ativos" value={allItems.length} />
         <Stat label="Abaixo do mínimo" value={critical} tone={critical ? "warn" : "ok"} />
         {costs && <Stat label="Estoque valorizado (custo)" value={money(valuation)} />}
         <Stat label="Unidades reservadas p/ OS" value={[...res.values()].reduce((a, b) => a + b, 0)} />
       </div>
-      {sp.novo && edit && <div className="card card-pad mb-5"><h2 className="mb-3 font-semibold">Novo item</h2><ItemForm /></div>}
+      {sp.novo && edit && <div className="card card-pad mb-5"><h2 className="mb-3 font-semibold">Novo item</h2><ItemForm suppliers={suppliers} /></div>}
       <form className="mb-4 flex flex-wrap gap-2">
         <input name="q" defaultValue={q} className="input max-w-xs" placeholder="SKU, descrição, OEM" />
         <select name="cat" defaultValue={sp.cat ?? ""} className="select max-w-48"><option value="">Todas as categorias</option>{Object.entries(CATEGORY_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>

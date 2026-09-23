@@ -4,19 +4,20 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard, CalendarDays, Users, Car, Columns3, ClipboardList, Package, Wrench, ShieldCheck, UserCog, Menu, X, Moon, Sun, LogOut, Search,
+  ShoppingCart, Truck, Landmark, ArrowDownToLine, ArrowUpFromLine, Wallet,
 } from "lucide-react";
 
-const ICONS = { LayoutDashboard, CalendarDays, Users, Car, Columns3, ClipboardList, Package, Wrench, ShieldCheck, UserCog };
+const ICONS = { LayoutDashboard, CalendarDays, Users, Car, Columns3, ClipboardList, Package, Wrench, ShieldCheck, UserCog, ShoppingCart, Truck, Landmark, ArrowDownToLine, ArrowUpFromLine, Wallet };
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; group?: string };
 
 export function Shell({ nav, user, logout, children }: { nav: NavItem[]; user: { name: string; role: string }; logout: () => Promise<void>; children: React.ReactNode }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [path]);
-  const isActive = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
+  const isActive = (href: string) => (href === "/" || href === "/financeiro" ? path === href : path.startsWith(href));
 
   const sidebar = (
-    <nav className="flex h-full flex-col gap-1 p-3" aria-label="Menu principal">
+    <nav className="flex h-full flex-col gap-1 overflow-y-auto p-3" aria-label="Menu principal">
       <Link href="/" className="mb-4 flex items-center gap-2 px-2 pt-1">
         <span className="grid h-8 w-8 place-items-center rounded-md bg-accent text-sm font-black text-[var(--accent-contrast)]">1S</span>
         <span className="leading-tight">

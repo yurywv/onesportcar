@@ -1,8 +1,9 @@
-import type { Payment, TimeEntry, WorkOrderPart, WorkOrderService } from "@prisma/client";
+import type { Title, TimeEntry, WorkOrderPart, WorkOrderService } from "@prisma/client";
 import type { Tx } from "./db";
 import type { SessionUser } from "./auth";
 import { audit } from "./audit";
 import { RuleError } from "./workflow";
+import { woFinance } from "./finance";
 
 export const PART_ACTIVE = ["RESERVADA", "AGUARDANDO_COMPRA", "APLICADA"];
 
@@ -13,7 +14,7 @@ export const entryMinutes = (t: Pick<TimeEntry, "startedAt" | "endedAt">, now = 
 export function woTotals(input: {
   services: WorkOrderService[];
   parts: WorkOrderPart[];
-  payments: Payment[];
+  titles: Pick<Title, "amount" | "settled" | "status">[];
   timeEntries: TimeEntry[];
   techCost: Map<string, number>;
 }) {
@@ -22,14 +23,14 @@ export function woTotals(input: {
   const servicesTotal = services.reduce((s, x) => s + x.price, 0);
   const partsTotal = parts.reduce((s, x) => s + x.price, 0);
   const total = servicesTotal + partsTotal;
-  const paid = input.payments.filter((p) => p.status === "CONFIRMADO").reduce((s, p) => s + p.amount, 0);
+  const fin = woFinance(servicesTotal + partsTotal, input.titles);
   const workedMin = input.timeEntries.reduce((s, t) => s + entryMinutes(t), 0);
   const soldMin = services.reduce((s, x) => s + x.soldMin, 0);
   const laborCost = Math.round(input.timeEntries.reduce((s, t) => s + (entryMinutes(t) / 60) * (input.techCost.get(t.technicianId) ?? 0), 0));
   const partsCost = parts.filter((p) => p.status === "APLICADA").reduce((s, p) => s + Math.round(p.unitCost * p.quantity), 0);
   const margin = total - laborCost - partsCost;
   return {
-    servicesTotal, partsTotal, total, paid, due: total - paid, workedMin, soldMin,
+    servicesTotal, partsTotal, total, paid: fin.paid, due: fin.due, billed: fin.billed, unbilled: fin.unbilled, openTitles: fin.openTitles, workedMin, soldMin,
     efficiency: workedMin ? soldMin / workedMin : null, laborCost, partsCost, margin, marginPct: total ? margin / total : null,
   };
 }

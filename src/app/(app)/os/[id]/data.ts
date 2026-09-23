@@ -22,7 +22,7 @@ export const WO_INCLUDE = {
   timeEntries: true,
   qualityChecks: { orderBy: { createdAt: "asc" } },
   checkOut: true,
-  payments: { orderBy: { createdAt: "asc" } },
+  titles: { include: { settlements: { include: { account: true }, orderBy: { createdAt: "asc" } } }, orderBy: [{ dueDate: "asc" }, { number: "asc" }] },
 } satisfies Prisma.WorkOrderInclude;
 
 export type WO = Prisma.WorkOrderGetPayload<{ include: typeof WO_INCLUDE }>;

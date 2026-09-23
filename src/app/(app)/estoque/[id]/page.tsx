@@ -14,9 +14,10 @@ export default async function StockItem({ params }: { params: Promise<{ id: stri
   const { id } = await params;
   const item = await db.inventoryItem.findUnique({ where: { id }, include: { movements: { orderBy: { createdAt: "desc" }, take: 100 } } });
   if (!item) notFound();
-  const [reservedParts, waiting] = await Promise.all([
+  const [reservedParts, waiting, suppliers] = await Promise.all([
     db.workOrderPart.findMany({ where: { inventoryItemId: id, status: "RESERVADA" }, include: { workOrder: true } }),
     db.workOrderPart.findMany({ where: { inventoryItemId: id, status: "AGUARDANDO_COMPRA" }, include: { workOrder: true } }),
+    db.supplier.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
   const edit = can(user.role, "estoque:movimentar");
   const costs = can(user.role, "orcamento:ver_custos") || edit;
@@ -48,12 +49,12 @@ export default async function StockItem({ params }: { params: Promise<{ id: stri
               </div>
             ) : <Empty>Sem movimentações.</Empty>}
           </Section>
-          {edit && <Section title="Cadastro"><ItemForm item={item} /></Section>}
+          {edit && <Section title="Cadastro"><ItemForm item={item} suppliers={suppliers} /></Section>}
         </div>
         <div className="space-y-5">
           {edit && (
             <>
-              <Section title="Entrada (compra / recebimento)">
+              <Section title="Entrada avulsa (sem pedido)">
                 <ActionForm action={moveStock} className="space-y-2" reset>
                   <input type="hidden" name="itemId" value={item.id} /><input type="hidden" name="kind" value="ENTRADA" />
                   <Field label="Quantidade"><input name="quantity" className="input" inputMode="decimal" required /></Field>

@@ -145,7 +145,7 @@ describe("fluxo crítico da OS (spec §18)", () => {
     await run((tx) => transition(tx, wo.id, "PRONTO_ENTREGA", consultor, { manual: true }));
 
     // Totais e margem
-    const full = await db.workOrder.findUniqueOrThrow({ where: { id: wo.id }, include: { services: true, parts: true, payments: true, timeEntries: true } });
+    const full = await db.workOrder.findUniqueOrThrow({ where: { id: wo.id }, include: { services: true, parts: true, titles: true, timeEntries: true } });
     const t = woTotals({ ...full, techCost: new Map([[tec.id, 10000]]) });
     expect(t.total).toBe(60000 + 20000 + 60000);
     expect(t.partsCost).toBe(5000 + 30000);
@@ -153,8 +153,8 @@ describe("fluxo crítico da OS (spec §18)", () => {
 
     // Cancelamento bloqueado com pagamento
     const wo2 = await openWO();
-    await db.payment.create({ data: { number: `REC-T${uid}`, workOrderId: wo2.id, method: "PIX", amount: 100, userId: consultor.id, userName: "c" } });
-    await expect(run((tx) => transition(tx, wo2.id, "CANCELADA", consultor, { manual: true, reason: "teste" }))).rejects.toThrow(/pagamento/);
+    await db.title.create({ data: { number: `TIT-T${uid}`, kind: "RECEBER", status: "PAGO", description: "x", workOrderId: wo2.id, customerId, categoryId: "00000000-0000-4000-8000-000000000101", dueDate: new Date(), amount: 100, settled: 100, createdById: consultor.id, createdByName: "c" } });
+    await expect(run((tx) => transition(tx, wo2.id, "CANCELADA", consultor, { manual: true, reason: "teste" }))).rejects.toThrow(/recebimento/);
 
     // Histórico de status completo e imutável
     const hist = await db.workOrderStatusHistory.findMany({ where: { workOrderId: wo.id } });

@@ -39,8 +39,8 @@ export default async function Dashboard() {
       where: { startsAt: { gte: start, lt: end }, status: { notIn: ["CANCELADO"] } },
       include: { vehicle: true, customer: true }, orderBy: { startsAt: "asc" },
     }),
-    db.payment.aggregate({ where: { createdAt: { gte: start, lt: end }, status: "CONFIRMADO" }, _sum: { amount: true } }),
-    db.payment.aggregate({ where: { createdAt: { gte: month }, status: "CONFIRMADO" }, _sum: { amount: true } }),
+    db.settlement.aggregate({ where: { date: { gte: start, lt: end }, title: { kind: "RECEBER" } }, _sum: { amount: true } }),
+    db.settlement.aggregate({ where: { date: { gte: month }, title: { kind: "RECEBER" } }, _sum: { amount: true } }),
     db.workOrder.findMany({ where: { status: "ENTREGUE", closedAt: { gte: month } }, include: { services: true, parts: true } }),
     db.$queryRaw<{ sku: string; name: string; onHand: number; minQty: number; unit: string }[]>`
       SELECT sku, name, "onHand", "minQty", unit FROM "InventoryItem" WHERE active AND "onHand" < "minQty" ORDER BY name LIMIT 8`,

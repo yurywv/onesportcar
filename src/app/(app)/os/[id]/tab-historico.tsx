@@ -8,7 +8,7 @@ import type { TabProps } from "./types";
 export async function TabHistorico({ wo, user }: TabProps) {
   const ids = [
     wo.id, wo.checkIn?.id, ...wo.estimates.map((e) => e.id), ...wo.estimates.flatMap((e) => e.versions.map((v) => v.id)),
-    ...wo.payments.map((p) => p.id), ...wo.services.map((s) => s.id), ...wo.diagnostics.map((d) => d.id), ...wo.inspections.map((i) => i.id),
+    ...wo.titles.map((t) => t.id), ...wo.services.map((s) => s.id), ...wo.diagnostics.map((d) => d.id), ...wo.inspections.map((i) => i.id),
   ].filter(Boolean) as string[];
   const logs = can(user.role, "auditoria:ver") || can(user.role, "os:ver_todas")
     ? await db.auditLog.findMany({ where: { entityId: { in: ids } }, orderBy: { createdAt: "asc" } })
