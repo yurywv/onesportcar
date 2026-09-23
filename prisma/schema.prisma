@@ -1,0 +1,754 @@
+// OneSportcar — modelo de dados do MVP (Fase 2)
+// Convenções: valores monetários em centavos (Int); tempos em minutos (Int);
+// tabelas marcadas como IMUTÁVEL têm UPDATE/DELETE bloqueados por trigger (migration immutable_tables).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+// ───────────────────────── Organização e acesso ─────────────────────────
+
+model Company {
+  id        String   @id @default(uuid())
+  name      String
+  document  String
+  createdAt DateTime @default(now())
+  branches  Branch[]
+}
+
+model Branch {
+  id        String   @id @default(uuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  code      String   @unique
+  name      String
+  createdAt DateTime @default(now())
+
+  users        User[]
+  workOrders   WorkOrder[]
+  appointments Appointment[]
+  bays         WorkshopBay[]
+  sequences    NumberSequence[]
+}
+
+enum Role {
+  ADMIN
+  GESTOR
+  CONSULTOR
+  TECNICO
+  ESTOQUISTA
+  COMPRADOR
+  FINANCEIRO
+  CAIXA
+  AUDITOR
+}
+
+model User {
+  id           String    @id @default(uuid())
+  branchId     String
+  branch       Branch    @relation(fields: [branchId], references: [id])
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         Role
+  active       Boolean   @default(true)
+  // Dados de técnico (quando role = TECNICO)
+  specialties  String?
+  level        String?
+  hourlyRate   Int? // centavos — valor/hora de venda
+  hourlyCost   Int? // centavos — custo/hora
+  failedLogins Int       @default(0)
+  lockedUntil  DateTime?
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessions Session[]
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  ip        String?
+  userAgent String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model NumberSequence {
+  id       String @id @default(uuid())
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id])
+  key      String // OS, ORC, CHK, REC
+  prefix   String
+  next     Int    @default(1)
+  padding  Int    @default(6)
+
+  @@unique([branchId, key])
+}
+
+// ───────────────────────── Clientes e veículos ─────────────────────────
+
+enum PersonType {
+  PF
+  PJ
+}
+
+model Customer {
+  id               String     @id @default(uuid())
+  type             PersonType
+  name             String // nome (PF) ou razão social (PJ)
+  tradeName        String?
+  document         String     @unique // CPF ou CNPJ (texto: CNPJ alfanumérico)
+  rgIe             String?
+  birthDate        DateTime?
+  phone            String?
+  whatsapp         String?
+  email            String?
+  cep              String?
+  street           String?
+  number           String?
+  complement       String?
+  district         String?
+  city             String?
+  uf               String?
+  origin           String?
+  notes            String?
+  preferredChannel String? // WHATSAPP, EMAIL, TELEFONE
+  consentMarketing Boolean    @default(false)
+  consentAt        DateTime?
+  active           Boolean    @default(true)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  vehicles     Vehicle[]
+  ownerships   VehicleOwnership[]
+  workOrders   WorkOrder[]
+  appointments Appointment[]
+
+  @@index([name])
+  @@index([phone])
+  @@index([email])
+}
+
+enum Propulsion {
+  GASOLINA
+  ETANOL
+  FLEX
+  DIESEL
+  HIBRIDO
+  HIBRIDO_PLUGIN
+  ELETRICO
+}
+
+model Vehicle {
+  id           String      @id @default(uuid())
+  customerId   String
+  customer     Customer    @relation(fields: [customerId], references: [id])
+  plate        String      @unique // normalizado: AAA9999 ou AAA9A99
+  renavam      String?
+  vin          String?
+  make         String
+  model        String
+  version      String?
+  yearMfg      Int?
+  yearModel    Int?
+  color        String?
+  propulsion   Propulsion  @default(GASOLINA)
+  engine       String?
+  transmission String?
+  traction     String?
+  power        String?
+  mileage      Int         @default(0)
+  notes        String?
+  active       Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  ownerships   VehicleOwnership[]
+  odometer     OdometerReading[]
+  workOrders   WorkOrder[]
+  appointments Appointment[]
+
+  @@index([vin])
+  @@index([customerId])
+}
+
+model VehicleOwnership {
+  id         String    @id @default(uuid())
+  vehicleId  String
+  vehicle    Vehicle   @relation(fields: [vehicleId], references: [id])
+  customerId String
+  customer   Customer  @relation(fields: [customerId], references: [id])
+  startedAt  DateTime  @default(now())
+  endedAt    DateTime?
+}
+
+model OdometerReading {
+  id            String   @id @default(uuid())
+  vehicleId     String
+  vehicle       Vehicle  @relation(fields: [vehicleId], references: [id])
+  km            Int
+  source        String // CHECKIN, CHECKOUT, MANUAL
+  justification String?
+  workOrderId   String?
+  userId        String?
+  createdAt     DateTime @default(now())
+
+  @@index([vehicleId, createdAt])
+}
+
+// ───────────────────────── Oficina ─────────────────────────
+
+enum BayStatus {
+  LIVRE
+  OCUPADO
+  RESERVADO
+  MANUTENCAO
+  INDISPONIVEL
+}
+
+model WorkshopBay {
+  id          String    @id @default(uuid())
+  branchId    String
+  branch      Branch    @relation(fields: [branchId], references: [id])
+  code        String
+  description String
+  equipment   String?
+  status      BayStatus @default(LIVRE)
+  active      Boolean   @default(true)
+
+  workOrders   WorkOrder[]
+  appointments Appointment[]
+
+  @@unique([branchId, code])
+}
+
+model ServiceCatalog {
+  id           String  @id @default(uuid())
+  code         String  @unique
+  name         String
+  category     String
+  standardMin  Int // tempo padrão (minutos) — hora vendida
+  hourlyRate   Int // centavos
+  fixedPrice   Int? // centavos — preço fechado (sobrepõe tempo × hora)
+  active       Boolean @default(true)
+}
+
+// ───────────────────────── Agenda ─────────────────────────
+
+enum AppointmentStatus {
+  AGENDADO
+  CONFIRMADO
+  CHEGOU
+  NAO_COMPARECEU
+  CANCELADO
+}
+
+model Appointment {
+  id           String            @id @default(uuid())
+  branchId     String
+  branch       Branch            @relation(fields: [branchId], references: [id])
+  customerId   String
+  customer     Customer          @relation(fields: [customerId], references: [id])
+  vehicleId    String
+  vehicle      Vehicle           @relation(fields: [vehicleId], references: [id])
+  startsAt     DateTime
+  durationMin  Int               @default(60)
+  services     String?
+  complaint    String?
+  consultantId String?
+  technicianId String?
+  bayId        String?
+  bay          WorkshopBay?      @relation(fields: [bayId], references: [id])
+  priority     String            @default("NORMAL")
+  pickup       Boolean           @default(false)
+  pickupAddress String?
+  notes        String?
+  status       AppointmentStatus @default(AGENDADO)
+  cancelReason String?
+  workOrderId  String?           @unique
+  workOrder    WorkOrder?        @relation(fields: [workOrderId], references: [id])
+  createdById  String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([branchId, startsAt])
+}
+
+// ───────────────────────── Ordem de Serviço ─────────────────────────
+
+enum WorkOrderStatus {
+  PRE_OS
+  CHECK_IN
+  AGUARDANDO_DIAGNOSTICO
+  EM_DIAGNOSTICO
+  ORCAMENTO
+  AGUARDANDO_APROVACAO
+  AGUARDANDO_PECAS
+  EM_EXECUCAO
+  CONTROLE_QUALIDADE
+  PREPARACAO
+  PRONTO_ENTREGA
+  ENTREGUE
+  ENCERRADA_SEM_SERVICO
+  CANCELADA
+}
+
+model WorkOrder {
+  id           String          @id @default(uuid())
+  number       String          @unique
+  branchId     String
+  branch       Branch          @relation(fields: [branchId], references: [id])
+  customerId   String
+  customer     Customer        @relation(fields: [customerId], references: [id])
+  vehicleId    String
+  vehicle      Vehicle         @relation(fields: [vehicleId], references: [id])
+  consultantId String?
+  technicianId String?
+  bayId        String?
+  bay          WorkshopBay?    @relation(fields: [bayId], references: [id])
+  status       WorkOrderStatus @default(PRE_OS)
+  priority     String          @default("NORMAL") // BAIXA, NORMAL, ALTA, URGENTE
+  complaint    String? // reclamação do cliente — texto original
+  notes        String? // notas internas
+  openedAt     DateTime        @default(now())
+  promisedAt   DateTime?
+  closedAt     DateTime?
+  cancelReason String?
+  returnOfId   String? // OS original, quando for retorno/garantia
+  returnType   String? // RETORNO_NORMAL, GARANTIA, RETRABALHO, NOVA_OCORRENCIA
+  createdById  String
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  appointment    Appointment?
+  statusHistory  WorkOrderStatusHistory[]
+  checkIn        CheckIn?
+  diagnostics    Diagnostic[]
+  inspections    Inspection[]
+  estimates      Estimate[]
+  services       WorkOrderService[]
+  parts          WorkOrderPart[]
+  timeEntries    TimeEntry[]
+  qualityChecks  QualityControl[]
+  checkOut       CheckOut?
+  payments       Payment[]
+
+  @@index([status])
+  @@index([customerId])
+  @@index([vehicleId])
+}
+
+// IMUTÁVEL
+model WorkOrderStatusHistory {
+  id          String           @id @default(uuid())
+  workOrderId String
+  workOrder   WorkOrder        @relation(fields: [workOrderId], references: [id])
+  fromStatus  WorkOrderStatus?
+  toStatus    WorkOrderStatus
+  userId      String?
+  userName    String?
+  reason      String?
+  source      String           @default("TELA") // TELA, API, KANBAN, AUTOMACAO, CLIENTE
+  createdAt   DateTime         @default(now())
+
+  @@index([workOrderId, createdAt])
+}
+
+model CheckIn {
+  id            String    @id @default(uuid())
+  number        String    @unique
+  workOrderId   String    @unique
+  workOrder     WorkOrder @relation(fields: [workOrderId], references: [id])
+  km            Int
+  kmJustification String?
+  fuelLevel     Int // 0–100 (% tanque ou % de carga — SoC)
+  range         Int? // autonomia em km
+  broughtBy     String
+  broughtByRelation String // TITULAR, TERCEIRO_AUTORIZADO, MOTORISTA, GUINCHO
+  arrivalMode   String // RODANDO, GUINCHO, LEVA_E_TRAZ
+  dashLights    String[]
+  keysCount     Int       @default(1)
+  hasManual     Boolean   @default(false)
+  hasDocuments  Boolean   @default(false)
+  personalItems String?
+  accessories   String?
+  conditions    Json // { pneus: "OK", rodas: "Riscos", ... }
+  interiorNotes String?
+  exteriorNotes String?
+  // Assinatura eletrônica (Lei 14.063/2020) + evidências
+  signedName    String?
+  signatureData String? // data URL PNG
+  signedAt      DateTime?
+  signedIp      String?
+  signedUa      String?
+  contentHash   String? // SHA-256 do conteúdo selado
+  locked        Boolean   @default(false)
+  createdById   String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  damages DamageMark[]
+}
+
+model DamageMark {
+  id        String   @id @default(uuid())
+  checkInId String
+  checkIn   CheckIn  @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+  view      String // TOPO
+  x         Float // 0–1
+  y         Float // 0–1
+  type      String // RISCO, AMASSADO, TRINCA, RODA, INTERNO
+  severity  String // LEVE, MEDIA, GRAVE
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+enum InspectionStatus {
+  OK
+  ATENCAO
+  RECOMENDADO
+  URGENTE
+  NA
+}
+
+model Inspection {
+  id           String           @id @default(uuid())
+  workOrderId  String
+  workOrder    WorkOrder        @relation(fields: [workOrderId], references: [id])
+  template     String
+  technicianId String
+  finishedAt   DateTime?
+  createdAt    DateTime         @default(now())
+  items        InspectionItem[]
+}
+
+model InspectionItem {
+  id             String           @id @default(uuid())
+  inspectionId   String
+  inspection     Inspection       @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  group          String
+  label          String
+  status         InspectionStatus @default(OK)
+  measurement    String?
+  note           String?
+  sortOrder      Int              @default(0)
+}
+
+model Diagnostic {
+  id            String    @id @default(uuid())
+  workOrderId   String
+  workOrder     WorkOrder @relation(fields: [workOrderId], references: [id])
+  technicianId  String
+  technicianName String
+  tests         String?
+  faultCodes    String?
+  scanTool      String?
+  diagnosis     String
+  probableCause String?
+  solution      String?
+  startedAt     DateTime  @default(now())
+  finishedAt    DateTime?
+}
+
+// ───────────────────────── Orçamento e aprovação ─────────────────────────
+
+enum EstimateStatus {
+  RASCUNHO
+  ENVIADO
+  RESPONDIDO
+}
+
+enum ItemType {
+  SERVICO
+  PECA
+  CONSUMIVEL
+  TERCEIRO
+  TAXA
+}
+
+enum ItemClass {
+  OBRIGATORIO
+  RECOMENDADO
+  PREVENTIVO
+  OPCIONAL
+}
+
+model Estimate {
+  id             String         @id @default(uuid())
+  number         String         @unique
+  workOrderId    String
+  workOrder      WorkOrder      @relation(fields: [workOrderId], references: [id])
+  kind           String         @default("INICIAL") // INICIAL, COMPLEMENTAR
+  status         EstimateStatus @default(RASCUNHO)
+  validUntil     DateTime?
+  notes          String?
+  createdById    String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  items    EstimateItem[]
+  versions EstimateVersion[]
+}
+
+// Itens do rascunho (editáveis). Ao enviar, são congelados em EstimateVersion.snapshot.
+model EstimateItem {
+  id              String    @id @default(uuid())
+  estimateId      String
+  estimate        Estimate  @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  type            ItemType
+  classification  ItemClass @default(OBRIGATORIO)
+  description     String
+  serviceId       String?
+  inventoryItemId String?
+  quantity        Float     @default(1)
+  minutes         Int? // serviço: tempo vendido
+  unitPrice       Int // centavos
+  unitCost        Int       @default(0) // centavos (custo estimado)
+  discount        Int       @default(0) // centavos (desconto total do item)
+  sortOrder       Int       @default(0)
+  createdAt       DateTime  @default(now())
+}
+
+// IMUTÁVEL
+model EstimateVersion {
+  id          String     @id @default(uuid())
+  estimateId  String
+  estimate    Estimate   @relation(fields: [estimateId], references: [id])
+  version     Int
+  snapshot    Json // itens congelados + totais
+  subtotal    Int
+  discount    Int
+  total       Int
+  contentHash String
+  sentAt      DateTime   @default(now())
+  sentById    String
+  sentByName  String
+
+  approvals Approval[]
+  links     ApprovalLink[]
+
+  @@unique([estimateId, version])
+}
+
+// Link público de aprovação (o token só existe na URL; aqui fica o hash)
+model ApprovalLink {
+  id          String          @id @default(uuid())
+  versionId   String
+  version     EstimateVersion @relation(fields: [versionId], references: [id])
+  tokenHash   String          @unique
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  openedAt    DateTime?
+  createdById String
+  createdAt   DateTime        @default(now())
+}
+
+enum Decision {
+  APROVADO
+  RECUSADO
+}
+
+// IMUTÁVEL — mudança de decisão gera novo registro
+model Approval {
+  id              String          @id @default(uuid())
+  versionId       String
+  version         EstimateVersion @relation(fields: [versionId], references: [id])
+  itemId          String // id do item dentro do snapshot
+  decision        Decision
+  channel         String // PRESENCIAL, LINK, TELEFONE, EMAIL, WHATSAPP
+  approverName    String
+  evidence        String?
+  ip              String?
+  userAgent       String?
+  userId          String? // usuário interno que registrou (quando não foi o cliente)
+  removedPartsDestination String? // DEVOLVER, DESCARTAR
+  createdAt       DateTime        @default(now())
+
+  @@index([versionId, itemId, createdAt])
+}
+
+// ───────────────────────── Execução ─────────────────────────
+
+model WorkOrderService {
+  id           String    @id @default(uuid())
+  workOrderId  String
+  workOrder    WorkOrder @relation(fields: [workOrderId], references: [id])
+  sourceItemId String? // item do snapshot aprovado
+  versionId    String?
+  description  String
+  soldMin      Int // minutos vendidos
+  price        Int // centavos (total líquido do item)
+  status       String    @default("PENDENTE") // PENDENTE, EM_EXECUCAO, PAUSADO, CONCLUIDO, CANCELADO
+  technicianId String?
+  finishedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  timeEntries TimeEntry[]
+}
+
+model WorkOrderPart {
+  id              String         @id @default(uuid())
+  workOrderId     String
+  workOrder       WorkOrder      @relation(fields: [workOrderId], references: [id])
+  sourceItemId    String?
+  versionId       String?
+  type            ItemType       @default(PECA)
+  inventoryItemId String?
+  inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+  description     String
+  quantity        Float
+  price           Int // centavos (total líquido do item)
+  unitCost        Int            @default(0) // custo médio no momento da baixa
+  customerSupplied Boolean       @default(false)
+  status          String         @default("RESERVADA") // RESERVADA, AGUARDANDO_COMPRA, APLICADA, DEVOLVIDA, CANCELADA
+  appliedAt       DateTime?
+  createdAt       DateTime       @default(now())
+}
+
+model TimeEntry {
+  id           String            @id @default(uuid())
+  workOrderId  String
+  workOrder    WorkOrder         @relation(fields: [workOrderId], references: [id])
+  serviceId    String
+  service      WorkOrderService  @relation(fields: [serviceId], references: [id])
+  technicianId String
+  technicianName String
+  startedAt    DateTime          @default(now())
+  endedAt      DateTime?
+  endReason    String? // PAUSA, FINALIZADO, AGUARDANDO_PECA, OUTRA_OS, FIM_JORNADA
+
+  @@index([technicianId, endedAt])
+}
+
+model QualityControl {
+  id          String    @id @default(uuid())
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
+  inspectorId String
+  inspectorName String
+  result      String // APROVADO, REPROVADO
+  checklist   Json
+  testDrive   Json?
+  notes       String?
+  createdAt   DateTime  @default(now())
+}
+
+model CheckOut {
+  id             String    @id @default(uuid())
+  workOrderId    String    @unique
+  workOrder      WorkOrder @relation(fields: [workOrderId], references: [id])
+  km             Int
+  fuelLevel      Int
+  receivedBy     String
+  receivedByRelation String
+  finalCondition String?
+  recommendations String?
+  removedPartsReturned Boolean @default(false)
+  releasedWithoutPayment Boolean @default(false)
+  releaseReason  String?
+  deliveredById  String
+  deliveredByName String
+  signedName     String
+  signatureData  String
+  signedIp       String?
+  signedUa       String?
+  contentHash    String
+  createdAt      DateTime  @default(now())
+}
+
+model Payment {
+  id          String    @id @default(uuid())
+  number      String    @unique
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
+  method      String // PIX, DINHEIRO, DEBITO, CREDITO, BOLETO, TRANSFERENCIA
+  installments Int      @default(1)
+  amount      Int // centavos
+  reference   String?
+  status      String    @default("CONFIRMADO") // CONFIRMADO, ESTORNADO
+  reversedReason String?
+  userId      String
+  userName    String
+  createdAt   DateTime  @default(now())
+}
+
+// ───────────────────────── Estoque ─────────────────────────
+
+model InventoryItem {
+  id        String   @id @default(uuid())
+  sku       String   @unique
+  name      String
+  oemCode   String?
+  mfrCode   String?
+  brand     String?
+  category  String // PECAS, OLEOS, FLUIDOS, FILTROS, PNEUS, QUIMICOS, CONSUMIVEIS, ACESSORIOS
+  unit      String   @default("UN")
+  location  String?
+  avgCost   Int      @default(0) // centavos — custo médio ponderado móvel
+  price     Int      @default(0) // centavos
+  onHand    Float    @default(0) // saldo físico (consequência dos movimentos)
+  minQty    Float    @default(0)
+  maxQty    Float?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  movements InventoryMovement[]
+  parts     WorkOrderPart[]
+
+  @@index([name])
+  @@index([oemCode])
+}
+
+// IMUTÁVEL
+model InventoryMovement {
+  id           String        @id @default(uuid())
+  itemId       String
+  item         InventoryItem @relation(fields: [itemId], references: [id])
+  type         String // ENTRADA, SAIDA_OS, DEVOLUCAO_OS, AJUSTE, INVENTARIO
+  quantity     Float // positivo = entrada, negativo = saída
+  unitCost     Int
+  balanceAfter Float
+  avgCostAfter Int
+  workOrderId  String?
+  partId       String?
+  reference    String?
+  reason       String?
+  userId       String
+  userName     String
+  createdAt    DateTime      @default(now())
+
+  @@index([itemId, createdAt])
+}
+
+// ───────────────────────── Auditoria ─────────────────────────
+
+// IMUTÁVEL
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  userName  String?
+  action    String // CREATE, UPDATE, DELETE, LOGIN, LOGIN_FAIL, STATUS, APPROVE, ...
+  entity    String
+  entityId  String?
+  before    Json?
+  after     Json?
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}

@@ -1,0 +1,144 @@
+@import "tailwindcss";
+
+/* OneSportcar design tokens — modo escuro é o padrão da oficina; claro para back-office iluminado */
+:root {
+  --bg: #f5f5f2;
+  --surface: #ffffff;
+  --surface-2: #f0efeb;
+  --border: #dedcd5;
+  --text: #16181b;
+  --muted: #5d626a;
+  --accent: #8a6a12;
+  --accent-contrast: #ffffff;
+  --accent-soft: #f3ead0;
+  --ok: #1f7a4d;
+  --ok-soft: #dcf1e5;
+  --warn: #9a5b00;
+  --warn-soft: #fbecd2;
+  --danger: #b42318;
+  --danger-soft: #fbe0dd;
+  --info: #1d5fa8;
+  --info-soft: #dde9f7;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 4px 16px rgb(0 0 0 / 0.04);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0d0f;
+    --surface: #15171a;
+    --surface-2: #1c1f23;
+    --border: #2b2f35;
+    --text: #eceded;
+    --muted: #9aa0a7;
+    --accent: #d8b44a;
+    --accent-contrast: #16130a;
+    --accent-soft: #2e2715;
+    --ok: #4cc38a;
+    --ok-soft: #13291e;
+    --warn: #f0a93b;
+    --warn-soft: #2d2212;
+    --danger: #f2705f;
+    --danger-soft: #331715;
+    --info: #6ea8ef;
+    --info-soft: #14233a;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c0d0f;
+  --surface: #15171a;
+  --surface-2: #1c1f23;
+  --border: #2b2f35;
+  --text: #eceded;
+  --muted: #9aa0a7;
+  --accent: #d8b44a;
+  --accent-contrast: #16130a;
+  --accent-soft: #2e2715;
+  --ok: #4cc38a;
+  --ok-soft: #13291e;
+  --warn: #f0a93b;
+  --warn-soft: #2d2212;
+  --danger: #f2705f;
+  --danger-soft: #331715;
+  --info: #6ea8ef;
+  --info-soft: #14233a;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--border);
+  --color-fg: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html, body { background: var(--bg); color: var(--text); }
+body { font-family: var(--font-geist-sans), system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+
+@layer components {
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+  .card-pad { padding: 1rem; }
+  @media (min-width: 768px) { .card-pad { padding: 1.25rem; } }
+
+  .label { display: block; font-size: .75rem; font-weight: 500; color: var(--muted); margin-bottom: .25rem; letter-spacing: .01em; }
+  .input, .select, .textarea {
+    width: 100%; background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: .55rem .7rem; font-size: .9rem; min-height: 40px;
+  }
+  .textarea { min-height: 80px; }
+  .input:focus, .select:focus, .textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  .input:disabled, .select:disabled, .textarea:disabled { opacity: .6; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: .4rem; border-radius: 8px;
+    padding: .5rem .9rem; font-size: .875rem; font-weight: 550; min-height: 40px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); cursor: pointer; transition: background .15s, border-color .15s; white-space: nowrap;
+  }
+  .btn:hover { background: var(--surface-2); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+  .btn-primary:hover { background: var(--accent); filter: brightness(1.07); }
+  .btn-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+  .btn-sm { min-height: 32px; padding: .3rem .6rem; font-size: .8rem; }
+  .btn-ghost { border-color: transparent; background: transparent; }
+
+  .badge { display: inline-flex; align-items: center; gap: .25rem; border-radius: 999px; padding: .1rem .55rem; font-size: .72rem; font-weight: 600; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); white-space: nowrap; }
+  .badge-ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+  .badge-warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+  .badge-danger { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+  .badge-info { background: var(--info-soft); color: var(--info); border-color: transparent; }
+  .badge-accent { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+
+  .table { width: 100%; font-size: .875rem; border-collapse: collapse; }
+  .table th { text-align: left; font-weight: 550; color: var(--muted); font-size: .75rem; padding: .6rem .75rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .table td { padding: .65rem .75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .table tr:last-child td { border-bottom: 0; }
+  .table tbody tr:hover { background: var(--surface-2); }
+
+  .plate { font-family: var(--font-geist-mono), monospace; font-weight: 600; letter-spacing: .06em; border: 1px solid var(--border); border-radius: 5px; padding: 0 .35rem; background: var(--surface-2); font-size: .8rem; }
+  .link { color: var(--accent); font-weight: 550; }
+  .link:hover { text-decoration: underline; }
+  .alert { border-radius: 8px; padding: .65rem .85rem; font-size: .875rem; border: 1px solid transparent; }
+  .alert-error { background: var(--danger-soft); color: var(--danger); }
+  .alert-ok { background: var(--ok-soft); color: var(--ok); }
+  .alert-warn { background: var(--warn-soft); color: var(--warn); }
+  .alert-info { background: var(--info-soft); color: var(--info); }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body, html { background: #fff !important; color: #000 !important; }
+  .card { box-shadow: none; border-color: #ccc; }
+}
