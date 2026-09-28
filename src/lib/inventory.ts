@@ -42,10 +42,10 @@ async function move(tx: Tx, user: SessionUser, m: MoveInput) {
   return mv;
 }
 
-export async function stockEntry(tx: Tx, user: SessionUser, itemId: string, quantity: number, unitCost: number, reference?: string) {
+export async function stockEntry(tx: Tx, user: SessionUser, itemId: string, quantity: number, unitCost: number, reference?: string, type: "ENTRADA" | "INVENTARIO" = "ENTRADA") {
   if (quantity <= 0) throw new RuleError("Quantidade deve ser positiva.");
   if (unitCost < 0) throw new RuleError("Custo inválido.");
-  const mv = await move(tx, user, { itemId, type: "ENTRADA", quantity, unitCost, reference });
+  const mv = await move(tx, user, { itemId, type, quantity, unitCost, reference });
   // Peças aguardando compra desse item passam a reservadas, por ordem de chegada da OS
   const waiting = await tx.workOrderPart.findMany({ where: { inventoryItemId: itemId, status: "AGUARDANDO_COMPRA" }, orderBy: { createdAt: "asc" } });
   let available = mv.balanceAfter - (await reservedQty(tx, itemId));

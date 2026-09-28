@@ -26,6 +26,8 @@ Hospedagem: Vercel (time Govertech, região `gru1` São Paulo) · Banco: Neon Po
 | Tesouraria | Contas (caixa, banco, adquirente) com saldo inicial; títulos a receber/pagar com parcelas, categoria, centro de custo, competência e documento; **baixas imutáveis** com juros, desconto e taxa; **estorno por lançamento inverso**; prorrogação e cancelamento com motivo; caixa não fica negativo; transferências; extrato com saldo acumulado; painel com saldos, vencidos, **fluxo de caixa previsto** (7–90 dias, alerta de saldo negativo) e realizado do mês por categoria |
 | Rastreabilidade | Painel na OS responde às perguntas da spec §24 (quem trouxe, km, avarias, diagnóstico, versões, quem aprovou, quem executou, tempo, peças, CQ, valores, margem, quem retirou) |
 | Auditoria | Log append-only (UPDATE/DELETE bloqueados por trigger) de login, cadastros, preços, descontos, estoque, aprovações, status, pagamentos e permissões, com visualizador e filtros |
+| Importação do SYSCAR | Planilhas .xls/.xlsx/.csv lidas no navegador; detecção da linha de cabeçalho e **sugestão automática de colunas**; validação linha a linha (CPF/CNPJ inclusive alfanumérico, placa, chassi, RENAVAM, e-mail, CEP e CPF numéricos sem zero à esquerda, milhar pt-BR); **VÁLIDOS / DUPLICADOS / INVÁLIDOS** com motivo e número da linha; CSV dos problemas; importação confirmada e auditada; **reversão por lote** (mantém o que já foi usado). Clientes, veículos (vínculo por CPF/CNPJ ou código SYSCAR), fornecedores, peças (saldo como inventário ao custo) e histórico de OS somente leitura |
+| Primeiro acesso | Usuário criado sem senha recebe **link de uso único (48 h)** para definir a própria senha; administrador pode gerar link de redefinição |
 | Busca global | Placa (com ou sem hífen), cliente, CPF/CNPJ, telefone, nº de OS/orçamento, SKU/OEM, respeitando o perfil |
 | Segurança | CSP, HSTS, X-Frame-Options, nosniff, Referrer-Policy; server actions com proteção de origem; senhas bcrypt (custo 12); `noindex` |
 
@@ -52,7 +54,6 @@ Hospedagem: Vercel (time Govertech, região `gru1` São Paulo) · Banco: Neon Po
 - **WhatsApp/e-mail/SMS e automações**: as telas avisam "canal não configurado"; nada é enviado.
 - **Portal do cliente com conta/PWA**, NPS e pós-venda.
 - **Relatórios/BI** com exportação CSV/XLSX/PDF.
-- **Importação do SYSCAR**.
 - **Modo offline** e upload retomável.
 
 ## 4. Pontos de atenção para uso real

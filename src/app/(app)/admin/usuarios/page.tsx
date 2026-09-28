@@ -1,6 +1,8 @@
 import { revalidatePath } from "next/cache";
 import type { Role } from "@prisma/client";
+import { headers } from "next/headers";
 import { requireUser, assertUser, hashPassword } from "@/lib/auth";
+import { createPasswordToken, checkPasswordStrength, unusableHash } from "@/lib/password";
 import { ROLE_LABEL, ROLE_PERMISSIONS, PERMISSIONS } from "@/lib/rbac";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
@@ -13,8 +15,24 @@ import { ActionForm, Submit } from "@/components/forms";
 
 export const metadata = { title: "Usuários" };
 
-function checkPassword(p: string) {
-  if (p.length < 10 || !/[A-Za-z]/.test(p) || !/\d/.test(p)) throw new RuleError("Senha deve ter ao menos 10 caracteres, com letras e números.");
+async function linkBase() {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  return `${h.get("x-forwarded-proto") ?? (host?.startsWith("localhost") ? "http" : "https")}://${host}`;
+}
+
+async function passwordLink(_: ActionState, fd: FormData): Promise<ActionState> {
+  "use server";
+  return run(async () => {
+    const admin = await assertUser("admin:usuarios");
+    const id = String(fd.get("id"));
+    const token = await db.$transaction(async (tx) => {
+      const t = await createPasswordToken(tx, id, "REDEFINICAO", admin.id);
+      await audit({ action: "PASSWORD_LINK", entity: "User", entityId: id, userId: admin.id, userName: admin.name }, tx);
+      return t;
+    });
+    return { message: "Link gerado (válido por 48 h, uso único). Envie somente ao próprio usuário.", data: { link: `${await linkBase()}/definir-senha/${token}` } };
+  });
 }
 
 async function saveUser(_: ActionState, fd: FormData): Promise<ActionState> {
@@ -27,23 +45,24 @@ async function saveUser(_: ActionState, fd: FormData): Promise<ActionState> {
     const email = req(fd, "email", "E-mail").toLowerCase();
     if (!isValidEmail(email)) throw new RuleError("E-mail inválido.");
     const password = str(fd, "password");
-    if (!id && !password) throw new RuleError("Defina a senha inicial.");
-    if (password) checkPassword(password);
+    if (password) checkPasswordStrength(password);
     if (id === admin.id && (role !== admin.role || !bool(fd, "active"))) throw new RuleError("Você não pode alterar o próprio perfil nem se desativar.");
     const data = {
       name: req(fd, "name", "Nome"), email, role, active: id ? bool(fd, "active") : true,
       specialties: str(fd, "specialties"), level: str(fd, "level"),
       hourlyRate: str(fd, "hourlyRate") ? parseMoney(fd.get("hourlyRate")) : null, hourlyCost: str(fd, "hourlyCost") ? parseMoney(fd.get("hourlyCost")) : null,
     };
-    await db.$transaction(async (tx) => {
+    const token = await db.$transaction(async (tx) => {
       const before = id ? await tx.user.findUniqueOrThrow({ where: { id }, select: { role: true, active: true, email: true } }) : null;
       const u = id
         ? await tx.user.update({ where: { id }, data: { ...data, ...(password && { passwordHash: await hashPassword(password), failedLogins: 0, lockedUntil: null }) } })
-        : await tx.user.create({ data: { ...data, branchId: admin.branchId, passwordHash: await hashPassword(password!) } });
+        : await tx.user.create({ data: { ...data, branchId: admin.branchId, passwordHash: password ? await hashPassword(password) : await unusableHash() } });
       if (id && (!data.active || password)) await tx.session.deleteMany({ where: { userId: id } });
       await audit({ action: id ? "UPDATE" : "CREATE", entity: "User", entityId: u.id, userId: admin.id, userName: admin.name, before, after: { email, role, active: data.active, passwordChanged: !!password } }, tx);
+      return !id && !password ? await createPasswordToken(tx, u.id, "PRIMEIRO_ACESSO", admin.id) : null;
     });
     revalidatePath("/admin/usuarios");
+    if (token) return { message: "Usuário criado. Envie o link de primeiro acesso ao próprio usuário (48 h, uso único):", data: { link: `${await linkBase()}/definir-senha/${token}` } };
     return id ? "Usuário atualizado." : "Usuário criado.";
   });
 }
@@ -58,7 +77,7 @@ export default async function Users() {
       <Field label="Nome *"><input name="name" className="input" required defaultValue={u?.name} /></Field>
       <Field label="E-mail *"><input name="email" type="email" className="input" required defaultValue={u?.email} /></Field>
       <Field label="Perfil"><select name="role" className="select" defaultValue={u?.role ?? "CONSULTOR"}>{roles.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
-      <Field label={u ? "Nova senha (opcional)" : "Senha inicial *"}><input name="password" type="password" className="input" autoComplete="new-password" /></Field>
+      <Field label={u ? "Nova senha (opcional)" : "Senha inicial (opcional)"} hint={u ? undefined : "Em branco: o sistema gera um link de primeiro acesso"}><input name="password" type="password" className="input" autoComplete="new-password" /></Field>
       <Field label="Especialidades (técnico)"><input name="specialties" className="input" defaultValue={u?.specialties ?? ""} /></Field>
       <Field label="Nível"><input name="level" className="input" defaultValue={u?.level ?? ""} /></Field>
       <Field label="Valor/hora venda (R$)"><input name="hourlyRate" className="input" defaultValue={u?.hourlyRate ? centsToInput(u.hourlyRate) : ""} /></Field>
@@ -78,7 +97,10 @@ export default async function Users() {
               <span><b>{u.name}</b> · {u.email}{!u.active && <span className="badge ml-2">inativo</span>}{u.lockedUntil && u.lockedUntil > new Date() && <span className="badge badge-danger ml-2">bloqueado</span>}</span>
               <span className="text-muted">{ROLE_LABEL[u.role]} · último acesso {dateTime(u.lastLoginAt)}</span>
             </summary>
-            <div className="border-t border-line p-4">{form(u)}</div>
+            <div className="space-y-3 border-t border-line p-4">
+              {form(u)}
+              <ActionForm action={passwordLink}><input type="hidden" name="id" value={u.id} /><Submit className="btn btn-sm">Gerar link para o usuário definir a senha</Submit></ActionForm>
+            </div>
           </details>
         ))}
       </div>

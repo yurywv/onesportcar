@@ -4,10 +4,10 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard, CalendarDays, Users, Car, Columns3, ClipboardList, Package, Wrench, ShieldCheck, UserCog, Menu, X, Moon, Sun, LogOut, Search,
-  ShoppingCart, Truck, Landmark, ArrowDownToLine, ArrowUpFromLine, Wallet,
+  ShoppingCart, Truck, Landmark, ArrowDownToLine, ArrowUpFromLine, Wallet, Upload,
 } from "lucide-react";
 
-const ICONS = { LayoutDashboard, CalendarDays, Users, Car, Columns3, ClipboardList, Package, Wrench, ShieldCheck, UserCog, ShoppingCart, Truck, Landmark, ArrowDownToLine, ArrowUpFromLine, Wallet };
+const ICONS = { LayoutDashboard, CalendarDays, Users, Car, Columns3, ClipboardList, Package, Wrench, ShieldCheck, UserCog, ShoppingCart, Truck, Landmark, ArrowDownToLine, ArrowUpFromLine, Wallet, Upload };
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; group?: string };
 
 export function Shell({ nav, user, logout, children }: { nav: NavItem[]; user: { name: string; role: string }; logout: () => Promise<void>; children: React.ReactNode }) {

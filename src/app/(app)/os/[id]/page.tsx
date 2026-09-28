@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { db } from "@/lib/db";
-import { dateTime } from "@/lib/format";
+import { dateTime, money as formatMoney } from "@/lib/format";
 import { allowedManualTargets, STATUS_LABEL } from "@/lib/workflow";
 import { woTotals } from "@/lib/wo";
 import { PageHeader, StatusBadge, Plate } from "@/components/ui";
@@ -81,6 +81,12 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
           </>
         )}
       />
+      {wo.legacy && (
+        <div className="alert alert-info mb-5">
+          <b>Histórico importado do SYSCAR</b> (OS {wo.legacyNumber}{wo.legacyTotal != null && ` · valor no SYSCAR ${formatMoney(wo.legacyTotal)}`}). Registro somente leitura, sem efeito em estoque ou financeiro.
+          {wo.notes && <p className="mt-2 whitespace-pre-line text-fg">{wo.notes}</p>}
+        </div>
+      )}
       <nav className="no-print -mx-4 mb-5 overflow-x-auto border-b border-line px-4 md:mx-0 md:px-0" aria-label="Seções da OS">
         <ul className="flex gap-1">
           {tabs.filter(([, , ok]) => ok).map(([k, label]) => (

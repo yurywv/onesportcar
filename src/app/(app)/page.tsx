@@ -41,7 +41,7 @@ export default async function Dashboard() {
     }),
     db.settlement.aggregate({ where: { date: { gte: start, lt: end }, title: { kind: "RECEBER" } }, _sum: { amount: true } }),
     db.settlement.aggregate({ where: { date: { gte: month }, title: { kind: "RECEBER" } }, _sum: { amount: true } }),
-    db.workOrder.findMany({ where: { status: "ENTREGUE", closedAt: { gte: month } }, include: { services: true, parts: true } }),
+    db.workOrder.findMany({ where: { status: "ENTREGUE", legacy: false, closedAt: { gte: month } }, include: { services: true, parts: true } }),
     db.$queryRaw<{ sku: string; name: string; onHand: number; minQty: number; unit: string }[]>`
       SELECT sku, name, "onHand", "minQty", unit FROM "InventoryItem" WHERE active AND "onHand" < "minQty" ORDER BY name LIMIT 8`,
     db.workOrder.findMany({ where: { status: "AGUARDANDO_APROVACAO" }, include: { vehicle: true, customer: true }, orderBy: { updatedAt: "asc" }, take: 6 }),

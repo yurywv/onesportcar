@@ -21,6 +21,7 @@ export default async function KanbanPage({ searchParams }: { searchParams: Promi
     db.workOrder.findMany({
       where: {
         technicianId: all ? sp.tecnico || undefined : user.id,
+        legacy: false,
         OR: [{ status: { in: OPEN_STATUSES } }, { status: "ENTREGUE", closedAt: { gte: new Date(now.getTime() - 24 * 3600_000) } }],
       },
       include: { vehicle: true, customer: true, parts: { where: { status: "AGUARDANDO_COMPRA" } }, estimates: { where: { status: "ENVIADO" } } },

@@ -17,8 +17,9 @@ async function doLogin(_: ActionState, fd: FormData): Promise<ActionState> {
   return r;
 }
 
-export default async function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ senha?: string }> }) {
   if (await getUser()) redirect("/");
+  const { senha } = await searchParams;
   return (
     <main className="grid min-h-dvh place-items-center px-4">
       <div className="w-full max-w-sm">
@@ -27,6 +28,7 @@ export default async function LoginPage() {
           <h1 className="text-2xl font-semibold tracking-tight">OneSportcar</h1>
           <p className="text-sm text-muted">Gestão de oficina · DBL Automotiva</p>
         </div>
+        {senha === "ok" && <p className="alert alert-ok mb-4">Senha definida. Entre com seu e-mail e a nova senha.</p>}
         <ActionForm action={doLogin} className="card card-pad space-y-4">
           <label className="block">
             <span className="label">E-mail</span>

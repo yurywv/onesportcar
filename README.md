@@ -15,13 +15,16 @@ prisma/
   migrations/            inclui triggers de imutabilidade (auditoria, histórico, aprovações, versões, estoque)
   seed.ts                dados FICTÍCIOS de demonstração (percorre o fluxo real via regras de domínio)
   seed-supply.ts         fornecedores, pedidos e tesouraria fictícios (pode rodar sobre um banco já semeado)
-  create-admin.ts        inicializa produção vazia com 1 administrador
+  create-admin.ts        inicializa produção vazia com 1 administrador (primeiro acesso por link, sem senha no script)
 src/lib/
   workflow.ts            máquina de estados da OS + pré-condições (validadas no servidor)
   estimate.ts            orçamento: snapshot imutável, versões, link de aprovação, decisões, materialização na OS
   inventory.ts           estoque: custo médio ponderado, reserva, baixa, devolução, bloqueio de negativo
   wo.ts                  apontamento de horas e totais/margem da OS
   purchasing.ts          compras: sugestão, alçada, aprovação, recebimento parcial, rateio de frete, contas a pagar
+  importer.ts            importação do SYSCAR: normalização, validação, duplicidade, gravação e reversão por lote
+  import-fields.ts       campos importáveis e sugestão automática de mapeamento de colunas
+  password.ts            links de uso único para primeiro acesso e redefinição de senha
   finance.ts             tesouraria: títulos/parcelas, baixas imutáveis, estorno, saldos, transferências, recebimento e faturamento da OS
   auth.ts / rbac.ts      sessão (cookie HttpOnly, hash no banco), bloqueio por tentativas, permissões por perfil
   audit.ts               log de auditoria append-only
@@ -41,6 +44,8 @@ npm run dev
 ```
 Os usuários de demonstração são `admin@`, `gestor@`, `consultor@`, `tecnico@`, `tecnico2@`, `estoque@`, `compras@`, `financeiro@` e `auditor@onesportcar.demo`. A senha é a definida em `SEED_PASSWORD`.
 
+> **Atenção:** `vercel link`/`vercel env pull` gravam `.env.local` com as credenciais do banco **remoto**, e o Next.js dá prioridade a esse arquivo sobre o `.env`. Renomeie-o (ex.: `.env.vercel-demo`) para o ambiente local não usar o banco publicado.
+
 ## Testes
 ```bash
 createdb onesportcar_test
@@ -53,4 +58,5 @@ npm test
 2. `vercel deploy --prod`. O build roda `prisma migrate deploy` automaticamente.
 3. Inicializar os dados uma única vez, a partir da máquina local, com a URL do banco de produção:
    - demonstração: `SEED_PASSWORD=... NODE_ENV=production ALLOW_DEMO_SEED=1 npm run db:seed-demo`
-   - produção vazia: `ADMIN_EMAIL=... ADMIN_PASSWORD=... npm run db:create-admin`
+   - produção vazia: `ADMIN_EMAIL=... APP_URL=https://... npm run db:create-admin` (imprime o link de primeiro acesso do administrador)
+4. Migração do SYSCAR: Administração → Importação SYSCAR, na ordem clientes → veículos → fornecedores → peças → histórico de OS.

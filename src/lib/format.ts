@@ -7,7 +7,8 @@ export const money = (cents: number | null | undefined) => brl.format((cents ?? 
 export function parseMoney(input: FormDataEntryValue | string | null | undefined): number {
   const s = String(input ?? "").trim();
   if (!s) return 0;
-  const normalized = s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s;
+  const thousands = !s.includes(",") && /^-?(R\$\s*)?\d{1,3}(\.\d{3})+$/.test(s); // "1.234" = mil duzentos e trinta e quatro
+  const normalized = s.includes(",") || thousands ? s.replace(/\./g, "").replace(",", ".") : s;
   const n = Number(normalized.replace(/[^\d.-]/g, ""));
   return Number.isFinite(n) ? Math.round(n * 100) : 0;
 }

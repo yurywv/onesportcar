@@ -19,6 +19,7 @@ const NAV: (NavItem & { perm: Permission })[] = [
   { href: "/financeiro/pagar", label: "Contas a pagar", icon: "ArrowUpFromLine", perm: "financeiro:ver", group: "Financeiro" },
   { href: "/financeiro/contas", label: "Contas e extratos", icon: "Wallet", perm: "financeiro:ver", group: "Financeiro" },
   { href: "/admin/usuarios", label: "Usuários", icon: "UserCog", perm: "admin:usuarios", group: "Administração" },
+  { href: "/admin/importacao", label: "Importação SYSCAR", icon: "Upload", perm: "admin:importar", group: "Administração" },
   { href: "/admin/auditoria", label: "Auditoria", icon: "ShieldCheck", perm: "auditoria:ver", group: "Administração" },
 ];
 

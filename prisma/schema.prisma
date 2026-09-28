@@ -70,6 +70,7 @@ model User {
   updatedAt    DateTime  @updatedAt
 
   sessions Session[]
+  passwordTokens PasswordToken[]
 }
 
 model Session {
@@ -128,6 +129,7 @@ model Customer {
   consentMarketing Boolean    @default(false)
   consentAt        DateTime?
   active           Boolean    @default(true)
+  legacyCode       String? // código no SYSCAR
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
@@ -173,6 +175,7 @@ model Vehicle {
   mileage      Int         @default(0)
   notes        String?
   active       Boolean     @default(true)
+  legacyCode   String? // código no SYSCAR
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
@@ -183,6 +186,7 @@ model Vehicle {
 
   @@index([vin])
   @@index([customerId])
+  @@index([legacyCode])
 }
 
 model VehicleOwnership {
@@ -329,6 +333,9 @@ model WorkOrder {
   cancelReason String?
   returnOfId   String? // OS original, quando for retorno/garantia
   returnType   String? // RETORNO_NORMAL, GARANTIA, RETRABALHO, NOVA_OCORRENCIA
+  legacy       Boolean         @default(false) // histórico importado do SYSCAR (somente leitura, sem efeitos)
+  legacyNumber String? // número da OS no SYSCAR
+  legacyTotal  Int? // valor total informado pelo SYSCAR (centavos)
   createdById  String
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
@@ -689,6 +696,7 @@ model InventoryItem {
   minQty    Float    @default(0)
   maxQty    Float?
   active    Boolean  @default(true)
+  legacyCode String? // código no SYSCAR
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -749,6 +757,7 @@ model Supplier {
   rating       Int? // 1–5
   notes        String?
   active       Boolean  @default(true)
+  legacyCode   String? // código no SYSCAR
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -984,6 +993,57 @@ model Transfer {
   userId        String
   userName      String
   createdAt     DateTime         @default(now())
+}
+
+// ───────────────────────── Acesso: definição de senha por link ─────────────────────────
+
+model PasswordToken {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique
+  purpose     String // PRIMEIRO_ACESSO, REDEFINICAO
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdById String?
+  createdAt   DateTime  @default(now())
+}
+
+// ───────────────────────── Importação (migração do SYSCAR) ─────────────────────────
+
+model ImportJob {
+  id            String      @id @default(uuid())
+  entity        String // CLIENTES, VEICULOS, FORNECEDORES, ITENS, OS
+  fileName      String
+  sheetName     String?
+  mapping       Json
+  status        String      @default("VALIDANDO") // VALIDANDO, VALIDADO, IMPORTANDO, IMPORTADO, DESCARTADO, REVERTIDO
+  totalRows     Int         @default(0)
+  userId        String
+  userName      String
+  importedAt    DateTime?
+  revertedAt    DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  rows ImportRow[]
+
+  @@index([createdAt])
+}
+
+model ImportRow {
+  id        String    @id @default(uuid())
+  jobId     String
+  job       ImportJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  rowNumber Int // linha na planilha
+  key       String? // chave de duplicidade normalizada (documento, placa, SKU, nº OS)
+  data      Json // valores normalizados
+  status    String // VALIDO, DUPLICADO, INVALIDO, IMPORTADO, ERRO, REVERTIDO
+  messages  String[]
+  targetId  String?
+
+  @@index([jobId, status])
+  @@index([jobId, key])
 }
 
 // ───────────────────────── Auditoria ─────────────────────────

@@ -41,6 +41,7 @@ export const PERMISSIONS = {
   "financeiro:estornar": "Estornar baixas e cancelar títulos",
   "financeiro:contas": "Gerenciar contas, categorias e transferências",
   "admin:usuarios": "Gerenciar usuários",
+  "admin:importar": "Importar cadastros do SYSCAR",
   "auditoria:ver": "Ver log de auditoria",
 } as const;
 
@@ -61,7 +62,7 @@ export const ROLE_LABEL: Record<Role, string> = {
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   ADMIN: ALL,
-  GESTOR: ALL.filter((p) => p !== "admin:usuarios"),
+  GESTOR: ALL.filter((p) => p !== "admin:usuarios" && p !== "admin:importar"),
   CONSULTOR: [
     "dashboard:ver", "clientes:ver", "clientes:editar", "clientes:ver_documentos", "veiculos:ver", "veiculos:editar",
     "agenda:ver", "agenda:editar", "os:ver", "os:ver_todas", "os:criar", "os:transicionar", "os:checkout",

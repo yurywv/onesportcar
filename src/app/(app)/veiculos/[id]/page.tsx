@@ -29,6 +29,7 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
   });
   if (!v) notFound();
   const edit = can(user.role, "veiculos:editar");
+  const kmByOs = new Map((await db.odometerReading.findMany({ where: { vehicleId: v.id, workOrderId: { not: null } } })).map((o) => [o.workOrderId!, o.km]));
   const customers = edit ? await db.customer.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
 
   return (
@@ -48,12 +49,13 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
                   <li key={w.id} className="mb-5 ml-5">
                     <span className="absolute -left-[5px] mt-1.5 h-2.5 w-2.5 rounded-full bg-accent" />
                     <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <span className="font-semibold tabular-nums">{w.checkIn ? km(w.checkIn.km) : "—"}</span>
+                      <span className="font-semibold tabular-nums">{w.checkIn ? km(w.checkIn.km) : kmByOs.get(w.id) ? km(kmByOs.get(w.id)) : "—"}</span>
                       <span className="text-muted">{date(w.openedAt)}</span>
                       <Link href={`/os/${w.id}`} className="link">{w.number}</Link>
                       <StatusBadge status={w.status} />
+                      {w.legacy && <span className="badge">SYSCAR</span>}
                     </div>
-                    <p className="mt-1 text-sm">{w.services.map((s) => s.description).join(" · ") || w.complaint || "—"}</p>
+                    <p className="mt-1 text-sm whitespace-pre-line">{w.services.map((s) => s.description).join(" · ") || (w.legacy ? w.notes : null) || w.complaint || "—"}</p>
                     {w.parts.length > 0 && <p className="text-xs text-muted">Peças: {w.parts.map((p) => p.description).join(", ")}</p>}
                   </li>
                 ))}
