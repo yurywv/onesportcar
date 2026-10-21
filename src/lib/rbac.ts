@@ -40,6 +40,10 @@ export const PERMISSIONS = {
   "financeiro:pagar": "Baixar títulos a pagar",
   "financeiro:estornar": "Estornar baixas e cancelar títulos",
   "financeiro:contas": "Gerenciar contas, categorias e transferências",
+  "equipe:editar": "Editar cadastro de mecânicos, vendedores e administradores (comissões, valor/hora)",
+  "fiscal:ver": "Ver notas fiscais emitidas",
+  "fiscal:emitir": "Emitir e cancelar NFS-e / NF-e",
+  "fiscal:configurar": "Configurar emitente e dados fiscais de produtos/serviços",
   "admin:usuarios": "Gerenciar usuários",
   "admin:importar": "Importar cadastros do SYSCAR",
   "auditoria:ver": "Ver log de auditoria",
@@ -66,7 +70,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   CONSULTOR: [
     "dashboard:ver", "clientes:ver", "clientes:editar", "clientes:ver_documentos", "veiculos:ver", "veiculos:editar",
     "agenda:ver", "agenda:editar", "os:ver", "os:ver_todas", "os:criar", "os:transicionar", "os:checkout",
-    "orcamento:editar", "orcamento:registrar_aprovacao", "pagamentos:registrar", "estoque:ver", "compras:ver",
+    "orcamento:editar", "orcamento:registrar_aprovacao", "pagamentos:registrar", "estoque:ver", "compras:ver", "fiscal:ver",
   ],
   TECNICO: ["os:ver", "os:diagnosticar", "os:executar", "os:cq", "os:transicionar", "estoque:ver", "estoque:requisitar", "veiculos:ver"],
   ESTOQUISTA: ["estoque:ver", "estoque:movimentar", "estoque:requisitar", "os:ver", "os:ver_todas", "compras:ver", "compras:receber"],
@@ -75,11 +79,12 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "dashboard:ver", "financeiro:ver_valores", "clientes:ver", "clientes:ver_documentos", "os:ver", "os:ver_todas",
     "pagamentos:registrar", "orcamento:ver_custos", "estoque:ver", "compras:ver", "fornecedores:editar",
     "financeiro:ver", "financeiro:lancar", "financeiro:receber", "financeiro:pagar", "financeiro:estornar", "financeiro:contas",
+    "fiscal:ver", "fiscal:emitir", "fiscal:configurar",
   ],
-  CAIXA: ["clientes:ver", "os:ver", "os:ver_todas", "pagamentos:registrar", "financeiro:ver", "financeiro:receber"],
+  CAIXA: ["clientes:ver", "os:ver", "os:ver_todas", "pagamentos:registrar", "financeiro:ver", "financeiro:receber", "fiscal:ver"],
   AUDITOR: [
     "dashboard:ver", "financeiro:ver_valores", "clientes:ver", "veiculos:ver", "agenda:ver", "os:ver", "os:ver_todas",
-    "orcamento:ver_custos", "estoque:ver", "auditoria:ver", "compras:ver", "financeiro:ver",
+    "orcamento:ver_custos", "estoque:ver", "auditoria:ver", "compras:ver", "financeiro:ver", "fiscal:ver",
   ],
 };
 

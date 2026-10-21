@@ -17,6 +17,7 @@ import { TabExecucao } from "./tab-execucao";
 import { TabQualidade } from "./tab-qualidade";
 import { TabEntrega } from "./tab-entrega";
 import { TabHistorico } from "./tab-historico";
+import { TabFiscal } from "./tab-fiscal";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const wo = await db.workOrder.findUnique({ where: { id: (await params).id }, select: { number: true } });
@@ -44,6 +45,7 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
     ["execucao", "Execução", true],
     ["qualidade", "Qualidade", true],
     ["entrega", "Pagamento e entrega", money || can(user.role, "os:checkout")],
+    ["fiscal", "Notas fiscais", can(user.role, "fiscal:ver")],
     ["historico", "Histórico", true],
   ] as const;
   const current = tabs.find(([k, , ok]) => k === tab && ok)?.[0] ?? "resumo";
@@ -55,7 +57,7 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
     <>
       <PageHeader
         back={<Link href="/os" className="link text-xs">← Ordens de serviço</Link>}
-        title={<span className="flex flex-wrap items-center gap-3">{wo.number} <StatusBadge status={wo.status} />{wo.priority !== "NORMAL" && <span className="badge badge-warn">{wo.priority}</span>}</span>}
+        title={<span className="flex flex-wrap items-center gap-3">{wo.number} <StatusBadge status={wo.status} />{wo.legacyNumber && !wo.legacy && <span className="badge">SYSCAR {wo.legacyNumber}</span>}{wo.origin === "BALCAO" && <span className="badge">Balcão</span>}{wo.priority !== "NORMAL" && <span className="badge badge-warn">{wo.priority}</span>}</span>}
         subtitle={<>{wo.vehicle.make} {wo.vehicle.model} {wo.vehicle.version} <Plate plate={wo.vehicle.plate} /> · <Link className="link" href={`/clientes/${wo.customerId}`}>{wo.customer.name}</Link> · previsão {dateTime(wo.promisedAt)}</>}
         actions={can(user.role, "os:transicionar") && (
           <>
@@ -65,7 +67,8 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
                 <Submit className="btn">→ {STATUS_LABEL[to]}</Submit>
               </ActionForm>
             ))}
-            <a href={`/os/${wo.id}/imprimir`} target="_blank" className="btn">Imprimir OS</a>
+            <a href={`/os/${wo.id}/imprimir?via=${money ? "cliente" : "oficina"}`} target="_blank" className="btn">{money ? "Imprimir (com valores)" : "Imprimir OS"}</a>
+            {money && <a href={`/os/${wo.id}/imprimir?via=oficina`} target="_blank" className="btn">Imprimir (oficina, sem valores)</a>}
             {canCancel && (
               <details className="relative">
                 <summary className="btn btn-danger list-none">Cancelar OS</summary>
@@ -103,6 +106,7 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
       {current === "qualidade" && <TabQualidade {...props} />}
       {current === "entrega" && <TabEntrega {...props} />}
       {current === "historico" && <TabHistorico {...props} />}
+      {current === "fiscal" && <TabFiscal {...props} />}
     </>
   );
 }

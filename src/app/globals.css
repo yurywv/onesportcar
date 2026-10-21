@@ -141,4 +141,8 @@ body { font-family: var(--font-geist-sans), system-ui, sans-serif; -webkit-font-
   .no-print { display: none !important; }
   body, html { background: #fff !important; color: #000 !important; }
   .card { box-shadow: none; border-color: #ccc; }
+  .app-shell { display: block !important; }
+  main:has(.print-sheet) { padding: 0 !important; max-width: none !important; }
+  .print-sheet table tr { break-inside: avoid; }
+  @page { size: A4; margin: 10mm; }
 }

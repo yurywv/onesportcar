@@ -10,6 +10,20 @@ import { RuleError } from "@/lib/workflow";
 
 const CATS = ["PECAS", "OLEOS", "FLUIDOS", "FILTROS", "PNEUS", "QUIMICOS", "CONSUMIVEIS", "ACESSORIOS"];
 
+function fiscalFields(fd: FormData) {
+  const digits = (k: string, len: number[], label: string) => {
+    const v = str(fd, k)?.replace(/\D/g, "") || null;
+    if (v && !len.includes(v.length)) throw new RuleError(`${label} deve ter ${len.join(" ou ")} dígitos.`);
+    return v;
+  };
+  const origin = num(fd, "origin") ?? 0;
+  if (origin < 0 || origin > 8) throw new RuleError("Origem inválida.");
+  return {
+    ncm: digits("ncm", [8], "NCM"), cest: digits("cest", [7], "CEST"), gtin: digits("gtin", [8, 12, 13, 14], "GTIN"),
+    cfop: str(fd, "cfop"), cstIcms: str(fd, "cstIcms"), origin,
+  };
+}
+
 export async function saveItem(_: ActionState, fd: FormData): Promise<ActionState> {
   return run(async () => {
     const user = await assertUser("estoque:movimentar");
@@ -20,6 +34,7 @@ export async function saveItem(_: ActionState, fd: FormData): Promise<ActionStat
       sku: req(fd, "sku", "SKU").toUpperCase(), name: req(fd, "name", "Descrição"), oemCode: str(fd, "oemCode"), mfrCode: str(fd, "mfrCode"),
       brand: str(fd, "brand"), category, unit: str(fd, "unit")?.toUpperCase() ?? "UN", location: str(fd, "location"),
       price: parseMoney(fd.get("price")), minQty: num(fd, "minQty") ?? 0, maxQty: num(fd, "maxQty"), supplierId: str(fd, "supplierId"),
+      ...fiscalFields(fd),
     };
     await db.$transaction(async (tx) => {
       if (id) {

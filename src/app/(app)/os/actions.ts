@@ -17,8 +17,10 @@ import { applyPart, returnPart } from "@/lib/inventory";
 import { startTimer, stopTimer, woTotals } from "@/lib/wo";
 import { receiveOnWorkOrder, billWorkOrder, parseTerms } from "@/lib/finance";
 import { CHECKIN_CONDITIONS, INSPECTION_TEMPLATES, QC_ITEMS } from "@/lib/checklists";
+import { normalizePlate } from "@/lib/validators";
+import { openCounterWorkOrder, parseItemLines, addParsedItems } from "@/lib/counter";
 
-const refresh = (id: string) => { revalidatePath(`/os/${id}`); revalidatePath("/oficina/kanban"); };
+const refresh = (id: string) => { revalidatePath(`/os/${id}`); revalidatePath("/oficina/kanban"); revalidatePath("/oficina/minhas"); };
 
 async function baseUrl() {
   const h = await headers();
@@ -140,6 +142,8 @@ export async function updateWorkOrder(_: ActionState, fd: FormData): Promise<Act
     const data = {
       technicianId: str(fd, "technicianId"), bayId: str(fd, "bayId"), consultantId: str(fd, "consultantId"),
       priority: str(fd, "priority") ?? "NORMAL", promisedAt: promised ? fromLocalInput(promised) : null, notes: str(fd, "notes"),
+      sellerId: str(fd, "sellerId"), publicNotes: str(fd, "publicNotes"),
+      ...(str(fd, "complaint") ? { complaint: str(fd, "complaint")! } : {}),
     };
     await db.$transaction(async (tx) => {
       await tx.workOrder.update({ where: { id }, data });
@@ -268,16 +272,18 @@ export async function addEstimateItem(_: ActionState, fd: FormData): Promise<Act
     const source = String(fd.get("source") ?? "manual");
     let type: ItemType, description: string, unitPrice: number, unitCost = 0, minutes: number | null = null;
     let serviceId: string | null = null, inventoryItemId: string | null = null;
+    let code: string | null = null, reference: string | null = null, unit: string | null = null;
     const quantity = num(fd, "quantity") ?? 1;
     if (quantity <= 0) throw new RuleError("Quantidade deve ser maior que zero.");
 
     if (source === "service") {
       const s = await db.serviceCatalog.findUniqueOrThrow({ where: { id: req(fd, "serviceId", "Serviço") } });
-      type = "SERVICO"; description = s.name; serviceId = s.id; minutes = int(fd, "minutes") ?? s.standardMin;
+      type = "SERVICO"; description = s.name; serviceId = s.id; code = s.code; minutes = int(fd, "minutes") ?? s.standardMin;
       unitPrice = s.fixedPrice ?? Math.round((minutes / 60) * s.hourlyRate);
     } else if (source === "stock") {
       const i = await db.inventoryItem.findUniqueOrThrow({ where: { id: req(fd, "inventoryItemId", "Item de estoque") } });
       type = i.category === "CONSUMIVEIS" ? "CONSUMIVEL" : "PECA"; description = i.name; inventoryItemId = i.id; unitPrice = i.price; unitCost = i.avgCost;
+      code = i.sku; reference = i.oemCode; unit = i.unit;
     } else {
       type = (String(fd.get("type")) as ItemType) || "SERVICO";
       if (!["SERVICO", "PECA", "CONSUMIVEL", "TERCEIRO", "TAXA"].includes(type)) throw new RuleError("Tipo inválido.");
@@ -300,7 +306,7 @@ export async function addEstimateItem(_: ActionState, fd: FormData): Promise<Act
     const count = await db.estimateItem.count({ where: { estimateId } });
     await db.$transaction(async (tx) => {
       const it = await tx.estimateItem.create({
-        data: { estimateId, type, classification, description, quantity, minutes, unitPrice, unitCost, discount, serviceId, inventoryItemId, sortOrder: count },
+        data: { estimateId, type, classification, description, quantity, minutes, unitPrice, unitCost, discount, serviceId, inventoryItemId, code, reference, unit, sortOrder: count },
       });
       await audit({ action: "ADD_ITEM", entity: "Estimate", entityId: estimateId, userId: user.id, userName: user.name, after: { itemId: it.id, description, quantity, unitPrice, discount, pct } }, tx);
     });
@@ -504,5 +510,53 @@ export async function checkOut(_: ActionState, fd: FormData): Promise<ActionStat
     });
     refresh(woId);
     return "Veículo entregue. Check-out selado.";
+  });
+}
+
+// ───────────── OS de balcão (padrão SYSCAR) ─────────────
+
+function parsedLines(fd: FormData, field: string, label: string) {
+  const { items, errors } = parseItemLines(String(fd.get(field) ?? ""));
+  if (errors.length) throw new RuleError(`${label}: ${errors.join(" ")}`);
+  return items;
+}
+
+export async function openCounterOS(_: ActionState, fd: FormData): Promise<ActionState> {
+  let woId = "";
+  const r = await run(async () => {
+    const user = await assertUser("os:criar");
+    if (!can(user.role, "orcamento:editar")) throw new RuleError("Você não tem permissão para montar orçamentos.");
+    const products = parsedLines(fd, "products", "Produtos");
+    const services = parsedLines(fd, "services", "Serviços");
+    const promised = str(fd, "promisedAt");
+    const plate = normalizePlate(req(fd, "plate", "Placa do veículo").split(/\s/)[0]);
+    const vehicle = await db.vehicle.findUnique({ where: { plate } });
+    if (!vehicle) throw new RuleError(`Veículo ${plate} não cadastrado. Cadastre o cliente e o veículo antes de abrir a OS.`);
+    const legacyNumber = str(fd, "legacyNumber");
+    const { workOrder } = await db.$transaction((tx) => openCounterWorkOrder(tx, user, {
+      legacyNumber, vehicleId: vehicle.id, complaint: req(fd, "complaint", "Problemas/avarias"), publicNotes: str(fd, "publicNotes"),
+      kmIn: int(fd, "kmIn"), sellerId: str(fd, "sellerId"), consultantId: str(fd, "consultantId"), technicianId: str(fd, "technicianId"),
+      promisedAt: promised ? fromLocalInput(promised) : null, products, services,
+    }));
+    woId = workOrder.id;
+  });
+  if (woId) redirect(`/os/${woId}?tab=orcamento`);
+  return r;
+}
+
+export async function addBulkItems(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const user = await assertUser("orcamento:editar");
+    const estimateId = String(fd.get("estimateId"));
+    const est = await draftEstimate(estimateId);
+    const products = parsedLines(fd, "products", "Produtos");
+    const services = parsedLines(fd, "services", "Serviços");
+    if (!products.length && !services.length) throw new RuleError("Cole ao menos uma linha.");
+    await db.$transaction(async (tx) => {
+      await addParsedItems(tx, estimateId, products, services);
+      await audit({ action: "ADD_ITEMS", entity: "Estimate", entityId: estimateId, userId: user.id, userName: user.name, after: { products: products.length, services: services.length } }, tx);
+    });
+    refresh(est.workOrderId);
+    return `${products.length + services.length} item(ns) adicionado(s).`;
   });
 }

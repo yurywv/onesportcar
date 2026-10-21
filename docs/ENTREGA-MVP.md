@@ -63,3 +63,22 @@ Hospedagem: Vercel (time Govertech, região `gru1` São Paulo) · Banco: Neon Po
 3. O ambiente atual é de **demonstração**, com dados fictícios. Antes do uso real, criar um projeto/banco de produção separado e inicializá-lo com `npm run db:create-admin`.
 4. Trocar a senha dos usuários demo, ou desativá-los, se o link for compartilhado fora da equipe.
 5. O código ainda não está em um repositório Git. Recomendo versionar no GitHub e conectar à Vercel para ter deploy automático e histórico.
+
+---
+
+# Entrega 21/10/2026 — OS no padrão SYSCAR, cadastros, fiscal e app instalável
+
+| Módulo | Entregue |
+|---|---|
+| OS de balcão | `Ordens de serviço → Nova OS (balcão)`: abre a OS já como orçamento, como no SYSCAR (vendedor, mecânico, km de entrada, problemas/avarias, OBS impressa, nº da OS no SYSCAR durante a operação em paralelo). Itens colados em lote (`qtd ; descrição ; valor [; código ; ref ; un]`, serviço por hora `H01:30`), com vínculo automático ao estoque/catálogo pelo código. O orçamento também aceita colar itens. |
+| Impressão da OS | Layout do SYSCAR (cliente, veículo, problemas/avarias, PRODUTOS, SERVIÇOS, totais, vendedor, OBS, assinatura) em duas vias: **com valores** (cliente/comercial) e **sem valores** (oficina, com caixas de “aplicado/executado” e assinaturas de mecânico e CQ). Técnico só imprime a via oficina. Conferido com a OS 4891: R$ 29.441,42 + R$ 3.880,00 = R$ 33.321,42. |
+| Cadastros | Página `Cadastros` com Clientes, Veículos, **Mecânicos** (especialidades, marcas, certificações, valor/hora, custo/hora, comissão), **Vendedores** (comissão sobre serviços e produtos), **Administradores**, Produtos (com NCM, CEST, CFOP, origem, CST, GTIN), Serviços (item LC 116, código de tributação nacional/municipal, NBS, ISS), Fornecedores, Contas, Categorias e Emitente fiscal. |
+| Fiscal | NFS-e da Prefeitura de Campinas (layout nacional, obrigatório desde 01/10/2026) e NF-e de produtos via **Focus NFe**: prévia validada (CPF/CNPJ, endereço, NCM, valores), transmissão, consulta, cancelamento com justificativa, PDF/XML, retransmissão após rejeição com a mesma referência. Aba “Notas fiscais” na OS e lista geral em `Financeiro → Notas fiscais`. Começa em **homologação**. IBS/CBS (2026) enviados conforme o layout. |
+| App instalável | PWA (manifest, ícones OneSportCar, service worker sem cache de dados de clientes, página offline). Mecânico entra direto em **Minha oficina**: OS atribuídas, sem valores, iniciar/pausar/falta peça/finalizar e ficha da oficina. |
+
+## Para emitir notas de verdade (passos da DBL/contabilidade)
+1. Contratar a Focus NFe e cadastrar a DBL no painel com o **certificado A1** (NF-e e NFS-e). Para Campinas: habilitar NFS-e **sem** marcar “Ambiente Nacional”.
+2. Cadastrar a DBL no portal de homologação da Prefeitura de Campinas.
+3. Na Vercel, criar `FISCAL_TOKEN_HOMOLOGACAO` (e depois `FISCAL_TOKEN_PRODUCAO`).
+4. Em `Cadastros → Emitente fiscal`, conferir IM, IE, código de tributação municipal, NBS e próximo número da DPS (depois da última nota do SYSCAR). No painel da Focus, NF-e série 1, próximo nº 14.
+5. Emitir algumas notas em homologação, validar com a contabilidade e só então mudar o ambiente para Produção.
