@@ -9,10 +9,14 @@ export const metadata: Metadata = {
   title: { default: "OneSportcar", template: "%s · OneSportcar" },
   description: "Gestão de oficina OneSportcar — DBL Automotiva",
   robots: { index: false, follow: false },
+  applicationName: "OneSportCar",
+  appleWebApp: { capable: true, title: "OneSportCar", statusBarStyle: "black-translucent" },
+  icons: { icon: "/icon-192.png" },
 };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#0c0d0f" };
 
-const themeScript = `try{var t=localStorage.getItem('osc-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}`;
+const themeScript = `try{var t=localStorage.getItem('osc-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}
+if('serviceWorker' in navigator&&location.protocol==='https:'){addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}`;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (

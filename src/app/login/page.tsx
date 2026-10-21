@@ -24,7 +24,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <main className="grid min-h-dvh place-items-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-lg bg-accent text-lg font-black text-[var(--accent-contrast)]">1S</div>
+          <div className="mx-auto mb-4 grid h-16 w-40 place-items-center rounded-xl bg-[#0c0d0f]"><img src="/logo-one.svg" alt="OneSportCar" className="h-7" /></div>
           <h1 className="text-2xl font-semibold tracking-tight">OneSportcar</h1>
           <p className="text-sm text-muted">Gestão de oficina · DBL Automotiva</p>
         </div>

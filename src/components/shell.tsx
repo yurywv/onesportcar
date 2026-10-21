@@ -4,25 +4,25 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard, CalendarDays, Users, Car, Columns3, ClipboardList, Package, Wrench, ShieldCheck, UserCog, Menu, X, Moon, Sun, LogOut, Search,
-  ShoppingCart, Truck, Landmark, ArrowDownToLine, ArrowUpFromLine, Wallet, Upload,
+  ShoppingCart, Truck, Landmark, ArrowDownToLine, ArrowUpFromLine, Wallet, Upload, FolderCog, FileText, Smartphone,
 } from "lucide-react";
 
-const ICONS = { LayoutDashboard, CalendarDays, Users, Car, Columns3, ClipboardList, Package, Wrench, ShieldCheck, UserCog, ShoppingCart, Truck, Landmark, ArrowDownToLine, ArrowUpFromLine, Wallet, Upload };
+const ICONS = { LayoutDashboard, CalendarDays, Users, Car, Columns3, ClipboardList, Package, Wrench, ShieldCheck, UserCog, ShoppingCart, Truck, Landmark, ArrowDownToLine, ArrowUpFromLine, Wallet, Upload, FolderCog, FileText, Smartphone };
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; group?: string };
 
 export function Shell({ nav, user, logout, children }: { nav: NavItem[]; user: { name: string; role: string }; logout: () => Promise<void>; children: React.ReactNode }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [path]);
-  const isActive = (href: string) => (href === "/" || href === "/financeiro" ? path === href : path.startsWith(href));
+  const isActive = (href: string) => (href === "/" || href === "/financeiro" ? path === href : path.startsWith(href) && !(href === "/os" && path.startsWith("/oficina")));
 
   const sidebar = (
     <nav className="flex h-full flex-col gap-1 overflow-y-auto p-3" aria-label="Menu principal">
       <Link href="/" className="mb-4 flex items-center gap-2 px-2 pt-1">
-        <span className="grid h-8 w-8 place-items-center rounded-md bg-accent text-sm font-black text-[var(--accent-contrast)]">1S</span>
+        <span className="grid h-9 place-items-center rounded-md bg-[#0c0d0f] px-2.5"><img src="/logo-one.svg" alt="" className="h-4" /></span>
         <span className="leading-tight">
-          <span className="block text-sm font-bold tracking-wide">OneSportcar</span>
-          <span className="block text-[10px] uppercase tracking-[.18em] text-muted">Workshop</span>
+          <span className="block text-sm font-bold tracking-wide">OneSportCar</span>
+          <span className="block text-[10px] uppercase tracking-[.18em] text-muted">Gestão da oficina</span>
         </span>
       </Link>
       {nav.map((item, i) => {
@@ -55,7 +55,7 @@ export function Shell({ nav, user, logout, children }: { nav: NavItem[]; user: {
   );
 
   return (
-    <div className="min-h-dvh md:grid md:grid-cols-[232px_1fr]">
+    <div className="app-shell min-h-dvh md:grid md:grid-cols-[232px_1fr]">
       <aside className="no-print sticky top-0 hidden h-dvh border-r border-line bg-surface md:block">{sidebar}</aside>
       {open && (
         <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true">

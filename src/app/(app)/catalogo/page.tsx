@@ -3,7 +3,10 @@ import { requireUser, assertUser } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
-import { run, req, str, int, bool, type ActionState } from "@/lib/action";
+import { run, req, str, int, num, bool, type ActionState } from "@/lib/action";
+import { RuleError } from "@/lib/workflow";
+import { LC116_LABEL } from "@/lib/fiscal-codes";
+import type { ServiceCatalog } from "@prisma/client";
 import { money, minutesLabel, parseMoney, centsToInput } from "@/lib/format";
 import { PageHeader, Field, Empty } from "@/components/ui";
 import { ActionForm, Submit } from "@/components/forms";
@@ -19,7 +22,10 @@ async function saveService(_: ActionState, fd: FormData): Promise<ActionState> {
     const data = {
       code: req(fd, "code", "Código").toUpperCase(), name: req(fd, "name", "Nome"), category: req(fd, "category", "Categoria"),
       standardMin: int(fd, "standardMin") ?? 60, hourlyRate: parseMoney(fd.get("hourlyRate")), fixedPrice: fixed ? parseMoney(fixed) : null, active: id ? bool(fd, "active") : true,
+      lc116: str(fd, "lc116"), nationalTaxCode: str(fd, "nationalTaxCode")?.replace(/\D/g, "") || null, municipalTaxCode: str(fd, "municipalTaxCode"),
+      nbs: str(fd, "nbs")?.replace(/\D/g, "") || null, issRate: num(fd, "issRate"),
     };
+    if (data.nationalTaxCode && data.nationalTaxCode.length !== 6) throw new RuleError("Código de tributação nacional deve ter 6 dígitos (ex.: 140101).");
     await db.$transaction(async (tx) => {
       const before = id ? await tx.serviceCatalog.findUnique({ where: { id } }) : null;
       const s = id ? await tx.serviceCatalog.update({ where: { id }, data }) : await tx.serviceCatalog.create({ data });
@@ -47,6 +53,7 @@ export default async function Catalog() {
             <Field label="Tempo padrão (min)"><input name="standardMin" className="input" inputMode="numeric" defaultValue={60} /></Field>
             <Field label="Valor/hora (R$)"><input name="hourlyRate" className="input" inputMode="decimal" required /></Field>
             <Field label="Preço fechado (R$, opcional)"><input name="fixedPrice" className="input" inputMode="decimal" /></Field>
+            <FiscalFields />
             <div className="flex items-end"><Submit>Adicionar</Submit></div>
           </ActionForm>
         </div>
@@ -68,6 +75,7 @@ export default async function Catalog() {
                   <Field label="Tempo (min)"><input name="standardMin" className="input" defaultValue={s.standardMin} /></Field>
                   <Field label="Valor/hora (R$)"><input name="hourlyRate" className="input" defaultValue={centsToInput(s.hourlyRate)} /></Field>
                   <Field label="Preço fechado (R$)"><input name="fixedPrice" className="input" defaultValue={s.fixedPrice ? centsToInput(s.fixedPrice) : ""} /></Field>
+                  <FiscalFields s={s} />
                   <label className="flex items-end gap-2 pb-2 text-sm"><input type="checkbox" name="active" defaultChecked={s.active} /> Ativo</label>
                   <div className="flex items-end"><Submit className="btn">Salvar</Submit></div>
                 </ActionForm>
@@ -77,5 +85,18 @@ export default async function Catalog() {
         </div>
       ) : <Empty>Nenhum serviço cadastrado.</Empty>}
     </>
+  );
+}
+
+function FiscalFields({ s }: { s?: ServiceCatalog }) {
+  return (
+    <fieldset className="grid gap-3 rounded-lg border border-line p-3 sm:col-span-3 sm:grid-cols-3 lg:col-span-6 lg:grid-cols-5">
+      <legend className="px-1 text-xs font-semibold uppercase tracking-wider text-muted">Fiscal (NFS-e) — vazio usa o padrão do emitente</legend>
+      <Field label="Item LC 116"><select name="lc116" className="select" defaultValue={s?.lc116 ?? ""}><option value="">Padrão</option>{Object.entries(LC116_LABEL).map(([k, l]) => <option key={k} value={k} title={l}>{k} — {l.slice(0, 40)}</option>)}</select></Field>
+      <Field label="Cód. tributação nacional"><input name="nationalTaxCode" className="input font-mono" inputMode="numeric" maxLength={6} placeholder="140101" defaultValue={s?.nationalTaxCode ?? ""} /></Field>
+      <Field label="Cód. tributação municipal"><input name="municipalTaxCode" className="input font-mono" defaultValue={s?.municipalTaxCode ?? ""} /></Field>
+      <Field label="NBS"><input name="nbs" className="input font-mono" inputMode="numeric" defaultValue={s?.nbs ?? ""} /></Field>
+      <Field label="Alíquota ISS (%)"><input name="issRate" className="input" inputMode="decimal" placeholder="5" defaultValue={s?.issRate ?? ""} /></Field>
+    </fieldset>
   );
 }

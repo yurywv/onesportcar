@@ -34,7 +34,7 @@ export default async function WorkOrders({ searchParams }: { searchParams: Promi
       <PageHeader
         title={all ? "Ordens de serviço" : "Minhas OS"}
         subtitle={`${total} OS ${status ? `em "${STATUS_LABEL[status]}"` : sp.status === "todas" ? "no total" : "em aberto"}`}
-        actions={can(user.role, "os:criar") && <Link href="/os/nova" className="btn btn-primary">Novo check-in</Link>}
+        actions={can(user.role, "os:criar") && <><Link href="/os/balcao" className="btn btn-primary">Nova OS (balcão)</Link><Link href="/os/nova" className="btn">Novo check-in</Link></>}
       />
       <form className="mb-4 flex flex-wrap gap-2">
         <input name="q" defaultValue={q} className="input max-w-xs" placeholder="Nº da OS, placa ou cliente" />
@@ -54,7 +54,7 @@ export default async function WorkOrders({ searchParams }: { searchParams: Promi
                 const late = w.promisedAt && w.promisedAt < now && OPEN_STATUSES.includes(w.status);
                 return (
                   <tr key={w.id}>
-                    <td><Link href={`/os/${w.id}`} className="link">{w.number}</Link>{w.priority !== "NORMAL" && <div className="text-xs text-warn">{w.priority}</div>}</td>
+                    <td><Link href={`/os/${w.id}`} className="link">{w.number}</Link>{w.legacyNumber && !w.legacy && <div className="text-xs text-muted">SYSCAR {w.legacyNumber}</div>}{w.priority !== "NORMAL" && <div className="text-xs text-warn">{w.priority}</div>}</td>
                     <td>{w.vehicle.make} {w.vehicle.model} <Plate plate={w.vehicle.plate} /></td>
                     <td>{w.customer.name}</td>
                     <td><StatusBadge status={w.status} /></td>

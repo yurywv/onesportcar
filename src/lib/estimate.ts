@@ -28,6 +28,9 @@ export type SnapshotItem = {
   unitCost: number;
   inventoryItemId: string | null;
   serviceId: string | null;
+  code?: string | null;
+  reference?: string | null;
+  unit?: string | null;
 };
 export type Snapshot = { items: SnapshotItem[]; subtotal: number; discount: number; total: number; notes: string | null };
 
@@ -41,6 +44,7 @@ export function buildSnapshot(items: EstimateItem[], notes: string | null): Snap
       id: i.id, type: i.type, classification: i.classification, description: i.description, quantity: i.quantity,
       minutes: i.minutes, unitPrice: i.unitPrice, discount: i.discount, gross: lineGross(i), total: lineTotal(i),
       unitCost: i.unitCost, inventoryItemId: i.inventoryItemId, serviceId: i.serviceId,
+      code: i.code, reference: i.reference, unit: i.unit,
     }));
   const subtotal = snap.reduce((s, i) => s + i.gross, 0);
   const discount = snap.reduce((s, i) => s + i.discount, 0);

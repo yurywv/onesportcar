@@ -15,11 +15,12 @@ const ARRIVAL: Record<string, string> = { RODANDO: "Rodando", GUINCHO: "Guincho"
 export async function TabResumo({ wo, user, names, totals, showMoney }: TabProps) {
   const ci = wo.checkIn;
   const editable = can(user.role, "os:transicionar") && !["ENTREGUE", "CANCELADA"].includes(wo.status);
-  const [techs, bays, consultants] = editable ? await Promise.all([
+  const [techs, bays, consultants, sellers] = editable ? await Promise.all([
     db.user.findMany({ where: { role: "TECNICO", active: true }, orderBy: { name: "asc" } }),
     db.workshopBay.findMany({ where: { active: true }, orderBy: { code: "asc" } }),
     db.user.findMany({ where: { role: { in: ["CONSULTOR", "GESTOR"] }, active: true }, orderBy: { name: "asc" } }),
-  ]) : [[], [], []];
+    db.user.findMany({ where: { active: true, OR: [{ isSeller: true }, { role: { in: ["CONSULTOR", "GESTOR"] } }] }, orderBy: { name: "asc" } }),
+  ]) : [[], [], [], []];
 
   // Rastreabilidade (spec §24)
   const approvals = wo.estimates.flatMap((e) => e.versions.flatMap((v) => v.approvals.map((a) => ({ ...a, est: e.number, v: v.version, snap: v.snapshot as unknown as Snapshot }))));
@@ -44,7 +45,8 @@ export async function TabResumo({ wo, user, names, totals, showMoney }: TabProps
           <DL items={[
             ["Quem trouxe / como chegou", ci ? `${ci.broughtBy} (${ci.broughtByRelation.toLowerCase().replace(/_/g, " ")}) · ${ARRIVAL[ci.arrivalMode] ?? ci.arrivalMode}` : "—"],
             ["Chegada", dateTime(wo.openedAt)],
-            ["Km / combustível na entrada", ci ? `${km(ci.km)} · ${ci.fuelLevel}%` : "—"],
+            ["Km / combustível na entrada", ci ? `${km(ci.km)} · ${ci.fuelLevel}%` : wo.kmIn != null ? `${km(wo.kmIn)} (OS de balcão, sem check-in)` : "—"],
+            ["Vendedor", wo.sellerId ? names.get(wo.sellerId) : "—"],
             ["Problema relatado", wo.complaint],
             ["Diagnóstico por", wo.diagnostics.map((d) => d.technicianName).join(", ") || "—"],
             ["Diagnóstico", wo.diagnostics.at(-1)?.diagnosis ?? "—"],
@@ -88,11 +90,14 @@ export async function TabResumo({ wo, user, names, totals, showMoney }: TabProps
               <Field label="Box"><select name="bayId" className="select" defaultValue={wo.bayId ?? ""}><option value="">—</option>{bays.map((b) => <option key={b.id} value={b.id}>{b.code} — {b.description}</option>)}</select></Field>
               <Field label="Previsão"><input type="datetime-local" name="promisedAt" className="input" defaultValue={wo.promisedAt ? toLocalInput(wo.promisedAt) : ""} /></Field>
               <Field label="Prioridade"><select name="priority" className="select" defaultValue={wo.priority}>{["BAIXA", "NORMAL", "ALTA", "URGENTE"].map((p) => <option key={p}>{p}</option>)}</select></Field>
+              <Field label="Vendedor"><select name="sellerId" className="select" defaultValue={wo.sellerId ?? ""}><option value="">—</option>{sellers.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></Field>
+              <Field label="Problemas / avarias (um por linha)"><textarea name="complaint" className="textarea" defaultValue={wo.complaint ?? ""} /></Field>
+              <Field label="OBS impressa na OS (cliente vê)"><textarea name="publicNotes" className="textarea" defaultValue={wo.publicNotes ?? ""} /></Field>
               <Field label="Notas internas"><textarea name="notes" className="textarea" defaultValue={wo.notes ?? ""} /></Field>
               <Submit className="btn w-full">Salvar</Submit>
             </ActionForm>
           ) : (
-            <DL items={[["Consultor", wo.consultantId ? names.get(wo.consultantId) : "—"], ["Técnico", wo.technicianId ? names.get(wo.technicianId) : "—"], ["Box", wo.bay?.code], ["Notas", wo.notes]]} />
+            <DL items={[["Vendedor", wo.sellerId ? names.get(wo.sellerId) : "—"], ["Consultor", wo.consultantId ? names.get(wo.consultantId) : "—"], ["Técnico", wo.technicianId ? names.get(wo.technicianId) : "—"], ["Box", wo.bay?.code], ["Notas", wo.notes]]} />
           )}
         </Section>
         {showMoney && (

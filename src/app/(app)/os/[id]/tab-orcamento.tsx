@@ -4,7 +4,7 @@ import { dateTime, money, minutesLabel } from "@/lib/format";
 import { ITEM_CLASS_LABEL, ITEM_TYPE_LABEL, lineTotal, type Snapshot } from "@/lib/estimate";
 import { Section, Field, Empty } from "@/components/ui";
 import { ActionForm, Submit } from "@/components/forms";
-import { createEstimate, addEstimateItem, removeEstimateItem, sendEstimateAction, newApprovalLink, registerApproval } from "../actions";
+import { addBulkItems, createEstimate, addEstimateItem, removeEstimateItem, sendEstimateAction, newApprovalLink, registerApproval } from "../actions";
 import type { TabProps } from "./types";
 
 const CLASSES = Object.entries(ITEM_CLASS_LABEL);
@@ -51,7 +51,7 @@ export async function TabOrcamento({ wo, user }: TabProps) {
                       <tbody>
                         {est.items.map((i) => (
                           <tr key={i.id}>
-                            <td><span className="text-xs text-muted">{ITEM_TYPE_LABEL[i.type]}</span><div>{i.description}{i.minutes ? <span className="text-xs text-muted"> · {minutesLabel(i.minutes)}</span> : null}</div></td>
+                            <td><span className="text-xs text-muted">{ITEM_TYPE_LABEL[i.type]}{i.code && ` · cód. ${i.code}`}{i.reference && ` · ref. ${i.reference}`}</span><div>{i.description}{i.minutes ? <span className="text-xs text-muted"> · {minutesLabel(i.minutes)}</span> : null}</div></td>
                             <td className="text-xs">{ITEM_CLASS_LABEL[i.classification]}</td>
                             <td className="text-right tabular-nums">{i.quantity}</td>
                             <td className="text-right tabular-nums">{money(i.unitPrice)}</td>
@@ -106,6 +106,16 @@ export async function TabOrcamento({ wo, user }: TabProps) {
                     <Submit className="btn w-full">Adicionar item</Submit>
                   </ActionForm>
                 </div>
+                <details className="mt-4 rounded-lg border border-line">
+                  <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">Colar vários itens (ex.: orçamento do SYSCAR)</summary>
+                  <ActionForm action={addBulkItems} className="grid gap-3 border-t border-line p-3 lg:grid-cols-2" reset>
+                    <input type="hidden" name="estimateId" value={est.id} />
+                    <p className="text-xs text-muted lg:col-span-2">Uma linha por item: <b>quantidade ; descrição ; valor unitário</b> [; código ; referência ; unidade]. Serviço por hora: quantidade <b>1:30</b>.</p>
+                    <Field label="Produtos"><textarea name="products" className="textarea min-h-32 font-mono text-xs" /></Field>
+                    <Field label="Serviços"><textarea name="services" className="textarea min-h-32 font-mono text-xs" /></Field>
+                    <div className="lg:col-span-2"><Submit className="btn">Adicionar itens</Submit></div>
+                  </ActionForm>
+                </details>
                 {est.items.length > 0 && (
                   <ActionForm action={sendEstimateAction} className="mt-4" confirm="Enviar ao cliente? A versão será congelada e não poderá ser alterada.">
                     <input type="hidden" name="estimateId" value={est.id} />
