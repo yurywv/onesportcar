@@ -5,6 +5,21 @@ import { dateTime } from "@/lib/format";
 import { ENTITY_LABEL, type ImportEntity } from "@/lib/import-fields";
 import { PageHeader, Empty } from "@/components/ui";
 import { JOB_STATUS } from "./status";
+import { ActionForm, Submit } from "@/components/forms";
+import { run, type ActionState } from "@/lib/action";
+import { assertUser } from "@/lib/auth";
+import { createImportKey, IMPORT_KEY_HOURS } from "@/lib/import-key";
+import { audit } from "@/lib/audit";
+
+async function newKey(_: ActionState): Promise<ActionState> {
+  "use server";
+  return run(async () => {
+    const user = await assertUser("admin:importar");
+    const token = await createImportKey(user);
+    await audit({ action: "IMPORT_KEY", entity: "ImportKey", userId: user.id, userName: user.name, after: { hours: IMPORT_KEY_HOURS } });
+    return { message: `Chave gerada (válida por ${IMPORT_KEY_HOURS} h; a anterior foi revogada). Ela aparece só agora:`, data: { key: token } };
+  });
+}
 
 export const metadata = { title: "Importação do SYSCAR" };
 export const dynamic = "force-dynamic";
@@ -19,6 +34,13 @@ export default async function Imports() {
     <>
       <PageHeader title="Importação do SYSCAR" subtitle="Cadastros entram só depois de validados e confirmados. Cada lote pode ser revertido enquanto os registros não forem usados."
         actions={<Link href="/admin/importacao/nova" className="btn btn-primary">Nova importação</Link>} />
+      <details className="card mb-5">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">Importação direta do SYSCAR (sem planilhas)</summary>
+        <div className="space-y-2 border-t border-line p-4 text-sm">
+          <p className="text-muted">Gera uma chave temporária para a página do SYSCAR enviar os relatórios direto para cá. Os lotes chegam em validação e só entram nos cadastros depois que você conferir e clicar em “Importar”.</p>
+          <ActionForm action={newKey}><Submit className="btn">Gerar chave de importação</Submit></ActionForm>
+        </div>
+      </details>
       {jobs.length ? (
         <div className="card overflow-x-auto">
           <table className="table">

@@ -1193,3 +1193,16 @@ model FiscalDocument {
   @@index([workOrderId])
   @@index([kind, status, createdAt])
 }
+
+// Chave temporária para a importação direta do SYSCAR (a página do SYSCAR envia os dados para /api/importacao/syscar).
+// Só o hash fica no banco; a chave aparece uma vez para o administrador. Expira em poucas horas.
+model ImportKey {
+  id         String    @id @default(uuid())
+  tokenHash  String    @unique
+  userId     String
+  userName   String
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+}

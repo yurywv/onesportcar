@@ -1,19 +1,21 @@
 // Definição dos campos de cada cadastro importável (compartilhado entre navegador e servidor).
 // Os sinônimos servem para sugerir automaticamente qual coluna do SYSCAR corresponde a cada campo.
 
-export type ImportEntity = "CLIENTES" | "VEICULOS" | "FORNECEDORES" | "ITENS" | "OS";
+export type ImportEntity = "CLIENTES" | "VEICULOS" | "FORNECEDORES" | "ITENS" | "SERVICOS" | "OS" | "OS_ITENS";
 export type FieldDef = { key: string; label: string; required?: boolean; synonyms: string[]; hint?: string };
 
 export const ENTITY_LABEL: Record<ImportEntity, string> = {
-  CLIENTES: "Clientes", VEICULOS: "Veículos", FORNECEDORES: "Fornecedores", ITENS: "Peças e estoque", OS: "Histórico de OS",
+  CLIENTES: "Clientes", VEICULOS: "Veículos", FORNECEDORES: "Fornecedores", ITENS: "Peças e estoque", SERVICOS: "Serviços (catálogo)", OS: "Histórico de OS", OS_ITENS: "Itens das OS (histórico)",
 };
-export const ENTITY_ORDER: ImportEntity[] = ["CLIENTES", "VEICULOS", "FORNECEDORES", "ITENS", "OS"];
+export const ENTITY_ORDER: ImportEntity[] = ["CLIENTES", "VEICULOS", "FORNECEDORES", "ITENS", "SERVICOS", "OS", "OS_ITENS"];
 export const ENTITY_HELP: Record<ImportEntity, string> = {
   CLIENTES: "Chave: CPF/CNPJ. Clientes sem documento válido ficam como inválidos para correção no SYSCAR.",
   VEICULOS: "Chave: placa. O proprietário é localizado pelo CPF/CNPJ ou pelo código do cliente no SYSCAR — importe os clientes antes.",
   FORNECEDORES: "Chave: CNPJ/CPF.",
   ITENS: "Chave: código da peça (SKU). Saldo informado entra como inventário inicial ao custo informado.",
+  SERVICOS: "Chave: código do serviço. O valor vira o preço/valor-hora do catálogo.",
   OS: "Histórico somente leitura (sem efeito em estoque ou financeiro). O veículo é localizado pela placa — importe os veículos antes.",
+  OS_ITENS: "Produtos e serviços de cada OS do histórico (monta o histórico de manutenção do veículo). A OS é localizada pelo número no SYSCAR — importe o histórico de OS antes. Sem efeito em estoque ou financeiro.",
 };
 
 const f = (key: string, label: string, synonyms: string[], extra: Partial<FieldDef> = {}): FieldDef => ({ key, label, synonyms, ...extra });
@@ -28,7 +30,29 @@ const ADDRESS: FieldDef[] = [
   f("uf", "UF", ["uf", "estado"]),
 ];
 
+const SERVICOS_FIELDS: FieldDef[] = [
+  f("code", "Código do serviço", ["codigo", "cod", "codigo servico", "cod servico", "id"], { required: true }),
+  f("name", "Descrição", ["descricao", "servico", "nome", "descricao servico"], { required: true }),
+  f("category", "Grupo / categoria", ["grupo", "categoria", "tipo"]),
+  f("price", "Valor (R$)", ["valor", "preco", "valor venda", "preco venda", "valor unitario"]),
+  f("minutes", "Tempo padrão (min)", ["tempo", "minutos", "tempo padrao", "duracao"]),
+];
+const OS_ITENS_FIELDS: FieldDef[] = [
+  f("legacyNumber", "Número da OS no SYSCAR", ["os", "o s", "numero os", "n os", "ordem"], { required: true }),
+  f("kind", "Tipo (produto/serviço)", ["tipo", "tipo item", "natureza"], { hint: "P/PRODUTO ou S/SERVIÇO; vazio = produto" }),
+  f("seq", "Sequência do item na OS", ["seq", "sequencia", "item"]),
+  f("code", "Código", ["codigo", "cod", "codigo produto", "codigo servico"]),
+  f("description", "Descrição", ["descricao", "produto", "servico", "item descricao"], { required: true }),
+  f("quantity", "Quantidade", ["quantidade", "qtd", "qtde"]),
+  f("unitPrice", "Valor unitário", ["valor unitario", "unitario", "vlr unit", "preco unitario"]),
+  f("total", "Valor total", ["valor total", "total", "vlr total"]),
+  f("cost", "Custo (CMV)", ["cmv", "custo", "custo total"]),
+  f("technician", "Responsável pelo item", ["responsavel pelo item", "mecanico", "tecnico", "responsavel"]),
+];
+
 export const FIELDS: Record<ImportEntity, FieldDef[]> = {
+  SERVICOS: SERVICOS_FIELDS,
+  OS_ITENS: OS_ITENS_FIELDS,
   CLIENTES: [
     f("legacyCode", "Código no SYSCAR", ["codigo", "cod", "cod cliente", "codigo cliente", "id"]),
     f("document", "CPF / CNPJ", ["cpf/cnpj", "cpf cnpj", "cnpj/cpf", "cpf", "cnpj", "documento", "doc"], { required: true }),
