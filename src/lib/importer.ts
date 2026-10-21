@@ -122,7 +122,7 @@ export function checkRow(entity: ImportEntity, v: Record<string, string>): Check
       const yearMfg = years[0] ? Number(years[0]) : null;
       const yearModel = t(v.yearModel).match(/\d{4}/)?.[0] ? Number(t(v.yearModel).match(/\d{4}/)![0]) : years[1] ? Number(years[1]) : yearMfg;
       const km = parseNumber(v.mileage);
-      if (!t(v.ownerDocument) && !t(v.ownerCode)) errors.push("Proprietário não informado (CPF/CNPJ ou código do cliente)");
+      if (!t(v.ownerDocument) && !t(v.ownerCode) && !t(v.ownerName)) errors.push("Proprietário não informado (CPF/CNPJ, código ou nome do cliente)");
       return {
         key: plate || null, errors, warnings,
         data: {
@@ -130,7 +130,7 @@ export function checkRow(entity: ImportEntity, v: Record<string, string>): Check
           propulsion: PROPULSION.find(([re]) => re.test(t(v.fuel)))?.[1] ?? "GASOLINA", vin, renavam, engine: opt(v.engine),
           mileage: km && km > 0 ? Math.round(km) : 0, notes: opt(v.notes), legacyCode: opt(v.legacyCode),
           ownerDocument: onlyDigits(t(v.ownerDocument)).length === 11 && !/[A-Za-z]/.test(t(v.ownerDocument)) ? onlyDigits(t(v.ownerDocument)) : t(v.ownerDocument) ? normalizeCNPJ(t(v.ownerDocument)) : null,
-          ownerCode: opt(v.ownerCode),
+          ownerCode: opt(v.ownerCode), ownerName: opt(v.ownerName), ownerPhone: onlyDigits(t(v.ownerPhone)).slice(-8) || null,
         },
       };
     }
@@ -195,10 +195,11 @@ export function checkRow(entity: ImportEntity, v: Record<string, string>): Check
       if (!plate) errors.push("Placa ausente");
       const total = t(v.total) ? parseMoney(t(v.total)) : null;
       const km = parseNumber(v.km);
+      const vin = t(v.vin).toUpperCase().replace(/\s/g, "");
       return {
         key: legacyNumber || null, errors, warnings,
         data: {
-          legacyNumber, openedAt, closedAt: closedAt ?? openedAt, plate, km: km && km > 0 ? Math.round(km) : null, total,
+          vin: vin && isValidVIN(vin) ? vin : null, legacyNumber, openedAt, closedAt: closedAt ?? openedAt, plate, km: km && km > 0 ? Math.round(km) : null, total,
           customerDocument: t(v.customerDocument) ? (onlyDigits(t(v.customerDocument)).length === 11 ? onlyDigits(t(v.customerDocument)) : normalizeCNPJ(t(v.customerDocument))) : null,
           complaint: opt(v.complaint), services: opt(v.services), parts: opt(v.parts), technician: opt(v.technician), notes: opt(v.notes),
           cancelled: /cancel/i.test(t(v.situation)), situation: opt(v.situation),
@@ -257,9 +258,16 @@ async function existingKeys(tx: Tx, entity: ImportEntity, keys: string[]) {
 /** Resolve vínculos (proprietário do veículo, veículo da OS, fornecedor da peça). */
 async function resolveRefs(tx: Tx, entity: ImportEntity, d: Record<string, unknown>): Promise<{ error?: string; data?: Record<string, unknown> }> {
   if (entity === "VEICULOS") {
-    const c = d.ownerDocument ? await tx.customer.findUnique({ where: { document: d.ownerDocument as string } })
+    let c = d.ownerDocument ? await tx.customer.findUnique({ where: { document: d.ownerDocument as string } })
       : d.ownerCode ? await tx.customer.findFirst({ where: { legacyCode: d.ownerCode as string } }) : null;
-    if (!c) return { error: `Proprietário não encontrado (${d.ownerDocument ?? `código ${d.ownerCode}`}). Importe os clientes antes.` };
+    if (!c && d.ownerName) {
+      // Relatório de veículos do SYSCAR traz só o nome do cliente: aceita quando o nome é único (ou o telefone desempata)
+      const same = await tx.customer.findMany({ where: { name: { equals: d.ownerName as string, mode: "insensitive" } } });
+      const byPhone = d.ownerPhone ? same.filter((x) => [x.phone, x.whatsapp].some((p) => p && p.replace(/\D/g, "").endsWith(d.ownerPhone as string))) : [];
+      c = same.length === 1 ? same[0] : byPhone.length === 1 ? byPhone[0] : null;
+      if (!c && same.length > 1) return { error: `Há ${same.length} clientes chamados "${d.ownerName}"; não foi possível decidir o proprietário.` };
+    }
+    if (!c) return { error: `Proprietário não encontrado (${d.ownerDocument ?? (d.ownerCode ? `código ${d.ownerCode}` : d.ownerName)}). Importe os clientes antes.` };
     return { data: { customerId: c.id, ownerName: c.name } };
   }
   if (entity === "OS") {
@@ -351,6 +359,7 @@ export async function importRow(tx: Tx, user: SessionUser, entity: ImportEntity,
         cancelReason: d.cancelled ? "Cancelada no SYSCAR" : null,
       } });
       if (d.km) await tx.odometerReading.create({ data: { vehicleId: d.vehicleId, km: d.km, source: "IMPORTACAO", workOrderId: w.id, userId: user.id, createdAt: new Date(d.openedAt) } });
+      if (d.vin) await tx.vehicle.updateMany({ where: { id: d.vehicleId, vin: null }, data: { vin: d.vin } });
       return w.id;
     }
   }
