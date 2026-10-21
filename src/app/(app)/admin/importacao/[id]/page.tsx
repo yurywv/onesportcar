@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 function preview(entity: ImportEntity, d: Record<string, unknown>) {
   const pick: Record<ImportEntity, string[]> = {
     CLIENTES: ["name", "document", "city"], FORNECEDORES: ["name", "document", "city"], VEICULOS: ["plate", "make", "model", "ownerName"],
-    ITENS: ["sku", "name", "onHand"], OS: ["legacyNumber", "plate", "openedAt"],
+    ITENS: ["sku", "name", "onHand"], SERVICOS: ["code", "name", "price"], OS: ["legacyNumber", "plate", "openedAt"], OS_ITENS: ["legacyNumber", "kind", "description", "total"],
   };
   return pick[entity].map((k) => d[k]).filter((v) => v !== null && v !== undefined && v !== "").map((v) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T/.test(v) ? v.slice(0, 10) : String(v))).join(" · ");
 }

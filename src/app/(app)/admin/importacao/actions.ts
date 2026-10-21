@@ -70,7 +70,7 @@ export async function importNextChunk(jobId: string) {
     for (const r of rows) {
       try {
         await db.$transaction(async (tx) => {
-          const id = await importRow(tx, user, job.entity as ImportEntity, r.data as Record<string, unknown>);
+          const id = await importRow(tx, user, job.entity as ImportEntity, { ...(r.data as Record<string, unknown>), __key: r.key });
           await tx.importRow.update({ where: { id: r.id }, data: { status: "IMPORTADO", targetId: id } });
         });
         done++;

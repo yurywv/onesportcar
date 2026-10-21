@@ -154,6 +154,37 @@ export function checkRow(entity: ImportEntity, v: Record<string, string>): Check
         },
       };
     }
+    case "SERVICOS": {
+      const code = t(v.code).toUpperCase().replace(/\s+/g, "");
+      if (!code) errors.push("Código ausente");
+      const name = t(v.name);
+      if (!name) errors.push("Descrição ausente");
+      const price = t(v.price) ? parseMoney(t(v.price)) : 0;
+      const minutes = parseNumber(v.minutes);
+      if (!price) warnings.push("Serviço sem valor: entra com R$ 0,00 (preencha no catálogo)");
+      return {
+        key: code || null, errors, warnings,
+        data: { code, name: name.slice(0, 200), category: opt(v.category) ?? "GERAL", price, minutes: minutes && minutes > 0 ? Math.round(minutes) : 60 },
+      };
+    }
+    case "OS_ITENS": {
+      const legacyNumber = t(v.legacyNumber).replace(/\s+/g, "");
+      if (!legacyNumber) errors.push("Número da OS ausente");
+      const description = t(v.description);
+      if (!description) errors.push("Descrição ausente");
+      const kind = /^s/i.test(t(v.kind)) ? "SERVICO" : "PRODUTO";
+      const quantity = parseNumber(v.quantity) ?? 1;
+      if (quantity <= 0) errors.push(`Quantidade inválida (${t(v.quantity)})`);
+      const unitPrice = t(v.unitPrice) ? parseMoney(t(v.unitPrice)) : 0;
+      const total = t(v.total) ? parseMoney(t(v.total)) : Math.round(unitPrice * quantity);
+      const cost = t(v.cost) ? parseMoney(t(v.cost)) : 0;
+      const code = opt(v.code);
+      const seq = t(v.seq) || "1";
+      return {
+        key: legacyNumber && description ? `${legacyNumber}|${kind[0]}|${seq}|${code ?? ""}|${description}|${quantity}|${total}`.slice(0, 300) : null, errors, warnings,
+        data: { legacyNumber, kind, code, description: description.slice(0, 300), quantity, unitPrice, total, cost, technician: opt(v.technician) },
+      };
+    }
     case "OS": {
       const legacyNumber = t(v.legacyNumber).replace(/\s+/g, "");
       if (!legacyNumber) errors.push("Número da OS ausente");
@@ -211,6 +242,15 @@ async function existingKeys(tx: Tx, entity: ImportEntity, keys: string[]) {
   if (entity === "VEICULOS") for (const v of await tx.vehicle.findMany({ where: { plate: { in: keys } }, select: { plate: true, model: true } })) m.set(v.plate, `Placa já cadastrada (${v.model})`);
   if (entity === "ITENS") for (const i of await tx.inventoryItem.findMany({ where: { sku: { in: keys } }, select: { sku: true, name: true } })) m.set(i.sku, `Código já cadastrado: ${i.name}`);
   if (entity === "OS") for (const w of await tx.workOrder.findMany({ where: { legacyNumber: { in: keys } }, select: { legacyNumber: true, number: true } })) m.set(w.legacyNumber!, `OS já importada (${w.number})`);
+  if (entity === "SERVICOS") for (const sv of await tx.serviceCatalog.findMany({ where: { code: { in: keys } }, select: { code: true, name: true } })) m.set(sv.code, `Código já cadastrado: ${sv.name}`);
+  if (entity === "OS_ITENS") {
+    const src = keys.map((k) => `SYSCAR:${k}`);
+    const [ps, ss] = await Promise.all([
+      tx.workOrderPart.findMany({ where: { sourceItemId: { in: src } }, select: { sourceItemId: true } }),
+      tx.workOrderService.findMany({ where: { sourceItemId: { in: src } }, select: { sourceItemId: true } }),
+    ]);
+    for (const x of [...ps, ...ss]) m.set(x.sourceItemId!.slice(7), "Item já importado");
+  }
   return m;
 }
 
@@ -231,6 +271,13 @@ async function resolveRefs(tx: Tx, entity: ImportEntity, d: Record<string, unkno
       if (c) customerId = c.id;
     }
     return { data: { vehicleId: v.id, customerId } };
+  }
+  if (entity === "OS_ITENS") {
+    const w = await tx.workOrder.findFirst({ where: { legacyNumber: d.legacyNumber as string }, select: { id: true, legacy: true, number: true, closedAt: true, openedAt: true } });
+    if (!w) return { error: `OS ${d.legacyNumber} não encontrada. Importe o histórico de OS antes.` };
+    if (!w.legacy) return { error: `A OS ${d.legacyNumber} já está em uso no sistema novo (${w.number}); itens não importados.` };
+    const inv = d.kind === "PRODUTO" && d.code ? await tx.inventoryItem.findFirst({ where: { OR: [{ sku: String(d.code).toUpperCase() }, { legacyCode: String(d.code) }] }, select: { id: true } }) : null;
+    return { data: { workOrderId: w.id, appliedAt: w.closedAt ?? w.openedAt, inventoryItemId: inv?.id ?? null } };
   }
   if (entity === "ITENS" && (d.supplierDocument || d.supplierCode)) {
     const s = d.supplierDocument ? await tx.supplier.findUnique({ where: { document: d.supplierDocument as string } })
@@ -275,6 +322,25 @@ export async function importRow(tx: Tx, user: SessionUser, entity: ImportEntity,
       } });
       if (d.onHand > 0) await stockEntry(tx, user, i.id, d.onHand, d.cost, "Saldo inicial importado do SYSCAR", "INVENTARIO");
       return i.id;
+    }
+    case "SERVICOS": {
+      const sv = await tx.serviceCatalog.create({ data: { code: d.code, name: d.name, category: d.category, standardMin: d.minutes, hourlyRate: d.price, fixedPrice: d.price || null } });
+      return sv.id;
+    }
+    case "OS_ITENS": {
+      const sourceItemId = `SYSCAR:${d.__key}`;
+      const label = d.code ? `${d.description} [${d.code}]` : d.description;
+      if (d.kind === "SERVICO") {
+        const sv = await tx.workOrderService.create({ data: {
+          workOrderId: d.workOrderId, sourceItemId, description: label, soldMin: 0, price: d.total, status: "CONCLUIDO", finishedAt: d.appliedAt ? new Date(d.appliedAt) : null,
+        } });
+        return `S:${sv.id}`;
+      }
+      const p = await tx.workOrderPart.create({ data: {
+        workOrderId: d.workOrderId, sourceItemId, type: "PECA", inventoryItemId: d.inventoryItemId, description: label, quantity: d.quantity, price: d.total,
+        unitCost: d.quantity ? Math.round(d.cost / d.quantity) : 0, status: "APLICADA", appliedAt: d.appliedAt ? new Date(d.appliedAt) : null,
+      } });
+      return `P:${p.id}`;
     }
     case "OS": {
       const notes = [d.services && `Serviços: ${d.services}`, d.parts && `Peças: ${d.parts}`, d.technician && `Técnico: ${d.technician}`, d.situation && `Situação no SYSCAR: ${d.situation}`, d.notes].filter(Boolean).join("\n");
@@ -325,9 +391,23 @@ export async function revertRow(tx: Tx, user: SessionUser, entity: ImportEntity,
       await tx.inventoryItem.update({ where: { id }, data: { onHand: 0, active: false, sku: `${item.sku}~REV${jobShort}` } });
       return null;
     }
+    case "SERVICOS": {
+      const used = await tx.estimateItem.count({ where: { serviceId: id } });
+      if (used) return "serviço já usado em orçamentos";
+      await tx.serviceCatalog.delete({ where: { id } });
+      return null;
+    }
+    case "OS_ITENS": {
+      const [kind, realId] = id.split(":");
+      if (kind === "S") await tx.workOrderService.delete({ where: { id: realId } });
+      else await tx.workOrderPart.delete({ where: { id: realId } });
+      return null;
+    }
     case "OS": {
       const w = await tx.workOrder.findUniqueOrThrow({ where: { id } });
       if (!w.legacy) return "OS não é histórico importado";
+      const items = await tx.workOrderPart.count({ where: { workOrderId: id } }) + await tx.workOrderService.count({ where: { workOrderId: id } });
+      if (items) return "OS tem itens importados — reverta antes o lote de itens das OS";
       await tx.odometerReading.deleteMany({ where: { workOrderId: id } });
       await tx.workOrder.delete({ where: { id } });
       return null;

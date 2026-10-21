@@ -38,6 +38,7 @@ export function FormMessage({ state }: { state: ActionState }) {
       <div role="status" className="alert alert-ok mt-3" key={state.at}>
         {state.ok}
         {state.data?.link && <LinkBox link={state.data.link} />}
+        {state.data?.key && <input readOnly value={state.data.key} className="input mt-2 font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />}
       </div>
     );
   return null;
