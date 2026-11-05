@@ -44,6 +44,12 @@ export const PERMISSIONS = {
   "fiscal:ver": "Ver notas fiscais emitidas",
   "fiscal:emitir": "Emitir e cancelar NFS-e / NF-e",
   "fiscal:configurar": "Configurar emitente e dados fiscais de produtos/serviços",
+  "cotacao:editar": "Cotar peças levantadas no diagnóstico",
+  "precificacao:editar": "Precificar serviços e aplicar margem sobre o custo das peças",
+  "fotos:adicionar": "Tirar fotos do veículo (check-in, diagnóstico, execução, check-out)",
+  "cameras:ver": "Ver câmeras da oficina",
+  "cameras:configurar": "Cadastrar câmeras e associá-las às fases e às OS",
+  "app_cliente:convidar": "Gerar convite de acesso ao app do cliente",
   "admin:usuarios": "Gerenciar usuários",
   "admin:importar": "Importar cadastros do SYSCAR",
   "auditoria:ver": "Ver log de auditoria",
@@ -62,6 +68,7 @@ export const ROLE_LABEL: Record<Role, string> = {
   FINANCEIRO: "Financeiro",
   CAIXA: "Caixa",
   AUDITOR: "Auditor",
+  RECEPCAO: "Consultor da recepção",
 };
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
@@ -70,11 +77,16 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   CONSULTOR: [
     "dashboard:ver", "clientes:ver", "clientes:editar", "clientes:ver_documentos", "veiculos:ver", "veiculos:editar",
     "agenda:ver", "agenda:editar", "os:ver", "os:ver_todas", "os:criar", "os:transicionar", "os:checkout",
-    "orcamento:editar", "orcamento:registrar_aprovacao", "pagamentos:registrar", "estoque:ver", "compras:ver", "fiscal:ver",
+    "orcamento:editar", "orcamento:registrar_aprovacao", "orcamento:ver_custos", "precificacao:editar", "pagamentos:registrar", "estoque:ver", "compras:ver", "fiscal:ver",
+    "fotos:adicionar", "cameras:ver", "app_cliente:convidar",
   ],
-  TECNICO: ["os:ver", "os:diagnosticar", "os:executar", "os:cq", "os:transicionar", "estoque:ver", "estoque:requisitar", "veiculos:ver"],
+  RECEPCAO: [
+    "clientes:ver", "clientes:editar", "clientes:ver_documentos", "veiculos:ver", "veiculos:editar", "agenda:ver", "agenda:editar",
+    "os:ver", "os:ver_todas", "os:criar", "os:checkout", "pagamentos:registrar", "fotos:adicionar", "cameras:ver", "app_cliente:convidar",
+  ],
+  TECNICO: ["os:ver", "os:diagnosticar", "os:executar", "os:cq", "os:transicionar", "estoque:ver", "estoque:requisitar", "veiculos:ver", "fotos:adicionar", "cameras:ver"],
   ESTOQUISTA: ["estoque:ver", "estoque:movimentar", "estoque:requisitar", "os:ver", "os:ver_todas", "compras:ver", "compras:receber"],
-  COMPRADOR: ["estoque:ver", "estoque:movimentar", "os:ver", "os:ver_todas", "compras:ver", "compras:editar", "compras:receber", "fornecedores:editar", "orcamento:ver_custos"],
+  COMPRADOR: ["estoque:ver", "estoque:movimentar", "os:ver", "os:ver_todas", "compras:ver", "compras:editar", "compras:receber", "fornecedores:editar", "orcamento:ver_custos", "cotacao:editar"],
   FINANCEIRO: [
     "dashboard:ver", "financeiro:ver_valores", "clientes:ver", "clientes:ver_documentos", "os:ver", "os:ver_todas",
     "pagamentos:registrar", "orcamento:ver_custos", "estoque:ver", "compras:ver", "fornecedores:editar",

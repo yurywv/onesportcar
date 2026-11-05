@@ -9,6 +9,9 @@ export const WO_INCLUDE = {
   checkIn: { include: { damages: true } },
   statusHistory: { orderBy: { createdAt: "asc" } },
   diagnostics: { orderBy: { startedAt: "asc" } },
+  diagnosticItems: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
+  photos: { select: { id: true, phase: true, caption: true, visibleToCustomer: true, createdByName: true, createdAt: true, bytes: true }, orderBy: { createdAt: "asc" } },
+  cameras: { include: { camera: true }, orderBy: { createdAt: "asc" } },
   inspections: { include: { items: { orderBy: { sortOrder: "asc" } } }, orderBy: { createdAt: "asc" } },
   estimates: {
     include: {

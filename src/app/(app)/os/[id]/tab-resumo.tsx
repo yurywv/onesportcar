@@ -30,6 +30,12 @@ export async function TabResumo({ wo, user, names, totals, showMoney }: TabProps
   return (
     <div className="grid gap-5 lg:grid-cols-3">
       <div className="space-y-5 lg:col-span-2">
+        {wo.status === "CHECK_IN" && can(user.role, "fotos:adicionar") && (
+          <div className={`alert ${wo.photos.some((p) => p.phase === "CHECK_IN") ? "alert-ok" : "alert-warn"} flex flex-wrap items-center justify-between gap-2`}>
+            <span>{wo.photos.filter((p) => p.phase === "CHECK_IN").length} foto(s) no check-in. Fotografe o veículo antes da assinatura — o cliente e o comercial veem as fotos.</span>
+            <Link href="?tab=midia" className="btn btn-sm">Tirar fotos</Link>
+          </div>
+        )}
         {ci && !ci.locked && can(user.role, "os:criar") && (
           <Section title="Assinatura do check-in pendente">
             <ActionForm action={signCheckIn} className="grid gap-4 sm:grid-cols-2">

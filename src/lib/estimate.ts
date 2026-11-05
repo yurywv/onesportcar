@@ -114,7 +114,7 @@ export async function recordDecisions(tx: Tx, versionId: string, decisions: Deci
   if (version.version !== latest) throw new RuleError("Esta versão foi substituída por uma mais recente.");
   if (est.status !== "ENVIADO") throw new RuleError("Este orçamento não está aguardando resposta.");
   if (!meta.approverName.trim()) throw new RuleError("Informe o nome de quem aprovou.");
-  if (!user && meta.channel !== "LINK") throw new RuleError("Canal inválido.");
+  if (!user && meta.channel !== "LINK" && meta.channel !== "APP") throw new RuleError("Canal inválido.");
   if (user && ["TELEFONE", "EMAIL", "WHATSAPP"].includes(meta.channel) && !meta.evidence?.trim())
     throw new RuleError("Aprovação remota registrada pelo consultor exige evidência (ex.: horário da ligação, print, e-mail).");
 

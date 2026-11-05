@@ -18,6 +18,8 @@ import { TabQualidade } from "./tab-qualidade";
 import { TabEntrega } from "./tab-entrega";
 import { TabHistorico } from "./tab-historico";
 import { TabFiscal } from "./tab-fiscal";
+import { TabPrecificacao } from "./tab-precificacao";
+import { TabMidia } from "./tab-midia";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const wo = await db.workOrder.findUnique({ where: { id: (await params).id }, select: { number: true } });
@@ -41,6 +43,8 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
   const tabs = [
     ["resumo", "Resumo", true],
     ["diagnostico", "Inspeção e diagnóstico", true],
+    ["midia", `Fotos e câmeras${wo.photos.length ? ` (${wo.photos.length})` : ""}`, true],
+    ["precificacao", wo.quoteStatus === "PENDENTE" ? "Cotação ●" : "Cotação e precificação", can(user.role, "cotacao:editar") || can(user.role, "precificacao:editar") || can(user.role, "orcamento:ver_custos")],
     ["orcamento", "Orçamentos", money || can(user.role, "orcamento:registrar_aprovacao")],
     ["execucao", "Execução", true],
     ["qualidade", "Qualidade", true],
@@ -107,6 +111,8 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
       {current === "entrega" && <TabEntrega {...props} />}
       {current === "historico" && <TabHistorico {...props} />}
       {current === "fiscal" && <TabFiscal {...props} />}
+      {current === "midia" && <TabMidia {...props} />}
+      {current === "precificacao" && <TabPrecificacao {...props} />}
     </>
   );
 }

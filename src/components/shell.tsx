@@ -5,16 +5,17 @@ import { useEffect, useState } from "react";
 import {
   LayoutDashboard, CalendarDays, Users, Car, Columns3, ClipboardList, Package, Wrench, ShieldCheck, UserCog, Menu, X, Moon, Sun, LogOut, Search,
   ShoppingCart, Truck, Landmark, ArrowDownToLine, ArrowUpFromLine, Wallet, Upload, FolderCog, FileText, Smartphone,
+  DoorOpen, BadgeDollarSign, Calculator, Video,
 } from "lucide-react";
 
-const ICONS = { LayoutDashboard, CalendarDays, Users, Car, Columns3, ClipboardList, Package, Wrench, ShieldCheck, UserCog, ShoppingCart, Truck, Landmark, ArrowDownToLine, ArrowUpFromLine, Wallet, Upload, FolderCog, FileText, Smartphone };
+const ICONS = { LayoutDashboard, CalendarDays, Users, Car, Columns3, ClipboardList, Package, Wrench, ShieldCheck, UserCog, ShoppingCart, Truck, Landmark, ArrowDownToLine, ArrowUpFromLine, Wallet, Upload, FolderCog, FileText, Smartphone, DoorOpen, BadgeDollarSign, Calculator, Video };
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; group?: string };
 
 export function Shell({ nav, user, logout, children }: { nav: NavItem[]; user: { name: string; role: string }; logout: () => Promise<void>; children: React.ReactNode }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [path]);
-  const isActive = (href: string) => (href === "/" || href === "/financeiro" ? path === href : path.startsWith(href) && !(href === "/os" && path.startsWith("/oficina")));
+  const isActive = (href: string) => (href === "/" || href === "/financeiro" ? path === href : path.startsWith(href) && !(href === "/os" && path.startsWith("/oficina")) && !(href === "/compras" && path.startsWith("/compras/cotacoes")));
 
   const sidebar = (
     <nav className="flex h-full flex-col gap-1 overflow-y-auto p-3" aria-label="Menu principal">

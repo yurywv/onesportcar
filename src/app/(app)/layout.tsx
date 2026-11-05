@@ -5,7 +5,9 @@ import { Shell, type NavItem } from "@/components/shell";
 
 const NAV: (NavItem & { perm: Permission })[] = [
   { href: "/", label: "Dashboard", icon: "LayoutDashboard", perm: "dashboard:ver" },
+  { href: "/recepcao", label: "Recepção", icon: "DoorOpen", perm: "os:criar" },
   { href: "/agenda", label: "Agenda", icon: "CalendarDays", perm: "agenda:ver" },
+  { href: "/comercial", label: "Comercial", icon: "BadgeDollarSign", perm: "precificacao:editar" },
   { href: "/cadastros", label: "Cadastros", icon: "FolderCog", perm: "os:ver" },
   { href: "/clientes", label: "Clientes", icon: "Users", perm: "clientes:ver" },
   { href: "/veiculos", label: "Veículos", icon: "Car", perm: "veiculos:ver" },
@@ -13,6 +15,7 @@ const NAV: (NavItem & { perm: Permission })[] = [
   { href: "/os", label: "Ordens de Serviço", icon: "ClipboardList", perm: "os:ver", group: "Oficina" },
   { href: "/oficina/minhas", label: "Minha oficina (celular)", icon: "Smartphone", perm: "os:executar", group: "Oficina" },
   { href: "/estoque", label: "Estoque", icon: "Package", perm: "estoque:ver", group: "Suprimentos" },
+  { href: "/compras/cotacoes", label: "Cotações de peças", icon: "Calculator", perm: "cotacao:editar", group: "Suprimentos" },
   { href: "/compras", label: "Pedidos de compra", icon: "ShoppingCart", perm: "compras:ver", group: "Suprimentos" },
   { href: "/fornecedores", label: "Fornecedores", icon: "Truck", perm: "compras:ver", group: "Suprimentos" },
   { href: "/catalogo", label: "Catálogo de serviços", icon: "Wrench", perm: "orcamento:editar", group: "Suprimentos" },
@@ -23,6 +26,7 @@ const NAV: (NavItem & { perm: Permission })[] = [
   { href: "/fiscal", label: "Notas fiscais", icon: "FileText", perm: "fiscal:ver", group: "Financeiro" },
   { href: "/admin/usuarios", label: "Usuários", icon: "UserCog", perm: "admin:usuarios", group: "Administração" },
   { href: "/admin/importacao", label: "Importação SYSCAR", icon: "Upload", perm: "admin:importar", group: "Administração" },
+  { href: "/admin/cameras", label: "Câmeras", icon: "Video", perm: "cameras:configurar", group: "Administração" },
   { href: "/admin/auditoria", label: "Auditoria", icon: "ShieldCheck", perm: "auditoria:ver", group: "Administração" },
 ];
 

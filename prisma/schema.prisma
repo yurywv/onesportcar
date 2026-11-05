@@ -47,6 +47,7 @@ enum Role {
   FINANCEIRO
   CAIXA
   AUDITOR
+  RECEPCAO // consultor da recepção (agenda, check-in, check-out)
 }
 
 model User {
@@ -114,39 +115,47 @@ enum PersonType {
 }
 
 model Customer {
-  id               String     @id @default(uuid())
-  type             PersonType
-  name             String // nome (PF) ou razão social (PJ)
-  tradeName        String?
-  document         String     @unique // CPF ou CNPJ (texto: CNPJ alfanumérico)
-  rgIe             String?
-  birthDate        DateTime?
-  phone            String?
-  whatsapp         String?
-  email            String?
-  cep              String?
-  street           String?
-  number           String?
-  complement       String?
-  district         String?
-  city             String?
-  uf               String?
-  origin           String?
-  notes            String?
-  preferredChannel String? // WHATSAPP, EMAIL, TELEFONE
-  consentMarketing Boolean    @default(false)
-  consentAt        DateTime?
-  active           Boolean    @default(true)
-  legacyCode       String? // código no SYSCAR
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  id                 String     @id @default(uuid())
+  type               PersonType
+  name               String // nome (PF) ou razão social (PJ)
+  tradeName          String?
+  document           String     @unique // CPF ou CNPJ (texto: CNPJ alfanumérico)
+  rgIe               String?
+  birthDate          DateTime?
+  phone              String?
+  whatsapp           String?
+  email              String?
+  cep                String?
+  street             String?
+  number             String?
+  complement         String?
+  district           String?
+  city               String?
+  uf                 String?
+  origin             String?
+  notes              String?
+  preferredChannel   String? // WHATSAPP, EMAIL, TELEFONE
+  consentMarketing   Boolean    @default(false)
+  consentAt          DateTime?
+  active             Boolean    @default(true)
+  legacyCode         String? // código no SYSCAR
+  // App do cliente: login por CPF/CNPJ + senha definida pelo próprio cliente (convite gerado pela recepção)
+  portalPasswordHash String?
+  portalActivatedAt  DateTime?
+  portalFailed       Int        @default(0)
+  portalLockedUntil  DateTime?
+  portalLastLoginAt  DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
 
-  vehicles     Vehicle[]
-  ownerships   VehicleOwnership[]
-  workOrders   WorkOrder[]
-  appointments Appointment[]
-  titles       Title[]
-  fiscalDocs   FiscalDocument[]
+  portalSessions CustomerSession[]
+  portalTokens   CustomerPortalToken[]
+  vehicles       Vehicle[]
+  ownerships     VehicleOwnership[]
+  workOrders     WorkOrder[]
+  appointments   Appointment[]
+  titles         Title[]
+  fiscalDocs     FiscalDocument[]
 
   @@index([name])
   @@index([phone])
@@ -297,6 +306,8 @@ model Appointment {
   pickupAddress String?
   notes         String?
   status        AppointmentStatus @default(AGENDADO)
+  kind          String            @default("SERVICO") // SERVICO, DIAGNOSTICO
+  origin        String            @default("INTERNO") // INTERNO, PORTAL (pedido pelo app do cliente)
   cancelReason  String?
   workOrderId   String?           @unique
   workOrder     WorkOrder?        @relation(fields: [workOrderId], references: [id])
@@ -356,24 +367,31 @@ model WorkOrder {
   legacy       Boolean         @default(false) // histórico importado do SYSCAR (somente leitura, sem efeitos)
   legacyNumber String? // número da OS no SYSCAR
   legacyTotal  Int? // valor total informado pelo SYSCAR (centavos)
+  // Cotação de peças (comprador) entre o diagnóstico e a precificação (comercial)
+  quoteStatus  String? // PENDENTE, CONCLUIDA (null = sem peças a cotar)
+  quoteDoneAt  DateTime?
+  quoteDoneBy  String?
   createdById  String
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
-  appointment    Appointment?
-  statusHistory  WorkOrderStatusHistory[]
-  checkIn        CheckIn?
-  diagnostics    Diagnostic[]
-  inspections    Inspection[]
-  estimates      Estimate[]
-  services       WorkOrderService[]
-  parts          WorkOrderPart[]
-  timeEntries    TimeEntry[]
-  qualityChecks  QualityControl[]
-  checkOut       CheckOut?
-  titles         Title[]
-  purchaseOrders PurchaseOrder[]
-  fiscalDocs     FiscalDocument[]
+  appointment     Appointment?
+  statusHistory   WorkOrderStatusHistory[]
+  checkIn         CheckIn?
+  diagnostics     Diagnostic[]
+  inspections     Inspection[]
+  estimates       Estimate[]
+  services        WorkOrderService[]
+  parts           WorkOrderPart[]
+  timeEntries     TimeEntry[]
+  qualityChecks   QualityControl[]
+  diagnosticItems DiagnosticItem[]
+  photos          WorkOrderPhoto[]
+  cameras         WorkOrderCamera[]
+  checkOut        CheckOut?
+  titles          Title[]
+  purchaseOrders  PurchaseOrder[]
+  fiscalDocs      FiscalDocument[]
 
   @@index([status])
   @@index([customerId])
@@ -488,8 +506,117 @@ model Diagnostic {
   diagnosis      String
   probableCause  String?
   solution       String?
+  laborMinutes   Int? // esforço estimado pelo mecânico (minutos de mão de obra)
   startedAt      DateTime  @default(now())
   finishedAt     DateTime?
+
+  items DiagnosticItem[]
+}
+
+// Serviços e peças levantados pelo mecânico. O comprador cota as peças; o comercial precifica e gera o orçamento.
+// O cliente nunca vê o diagnóstico detalhado — só a descrição comercial do item no orçamento.
+model DiagnosticItem {
+  id              String      @id @default(uuid())
+  workOrderId     String
+  workOrder       WorkOrder   @relation(fields: [workOrderId], references: [id])
+  diagnosticId    String?
+  diagnostic      Diagnostic? @relation(fields: [diagnosticId], references: [id])
+  type            ItemType // SERVICO (mão de obra), PECA, CONSUMIVEL, TERCEIRO
+  classification  ItemClass   @default(OBRIGATORIO)
+  description     String
+  quantity        Float       @default(1)
+  minutes         Int? // serviço: esforço estimado
+  reference       String? // part number / referência do fabricante
+  notes           String? // observação técnica (interna)
+  // Cotação (comprador)
+  inventoryItemId String?
+  supplierId      String?
+  supplierName    String?
+  unitCost        Int? // centavos
+  leadTimeDays    Int?
+  quoteNotes      String?
+  quotedById      String?
+  quotedByName    String?
+  quotedAt        DateTime?
+  // Precificação (comercial)
+  estimateItemId  String?
+  sortOrder       Int         @default(0)
+  createdById     String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([workOrderId])
+}
+
+// Fotos do veículo por fase (check-in da recepção, diagnóstico, execução, check-out).
+// Guardadas no banco já reduzidas no navegador (JPEG ~1600px).
+model WorkOrderPhoto {
+  id                String       @id @default(uuid())
+  workOrderId       String
+  workOrder         WorkOrder    @relation(fields: [workOrderId], references: [id])
+  phase             ServicePhase
+  caption           String?
+  mime              String       @default("image/jpeg")
+  bytes             Int
+  data              Bytes
+  visibleToCustomer Boolean      @default(true)
+  createdById       String
+  createdByName     String
+  createdAt         DateTime     @default(now())
+
+  @@index([workOrderId, phase])
+}
+
+// ───────────────────────── Câmeras (cliente assiste à manutenção) ─────────────────────────
+
+enum ServicePhase {
+  AGENDAMENTO
+  CHECK_IN
+  DIAGNOSTICO
+  ORCAMENTO
+  EXECUCAO
+  LAVAGEM
+  CHECK_OUT
+}
+
+model Camera {
+  id              String   @id @default(uuid())
+  name            String
+  location        String? // ex.: Box 2, Recepção, Lavagem
+  kind            String   @default("HLS") // HLS (.m3u8), IFRAME (player embutido do NVR/nuvem), MJPEG, SNAPSHOT (imagem atualizada)
+  url             String
+  active          Boolean  @default(true)
+  customerVisible Boolean  @default(true)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  phases      CameraPhaseDefault[]
+  assignments WorkOrderCamera[]
+}
+
+// Câmeras padrão de cada fase (configuradas pelo gestor). Ao entrar na fase, a OS recebe essas câmeras.
+model CameraPhaseDefault {
+  id       String       @id @default(uuid())
+  cameraId String
+  camera   Camera       @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  phase    ServicePhase
+
+  @@unique([cameraId, phase])
+}
+
+// Câmera associada à OS numa fase (cópia do padrão + ajustes, ex.: o box onde o carro está).
+model WorkOrderCamera {
+  id          String       @id @default(uuid())
+  workOrderId String
+  workOrder   WorkOrder    @relation(fields: [workOrderId], references: [id])
+  phase       ServicePhase
+  cameraId    String
+  camera      Camera       @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  createdById String?
+  createdAt   DateTime     @default(now())
+
+  @@unique([workOrderId, phase, cameraId])
 }
 
 // ───────────────────────── Orçamento e aprovação ─────────────────────────
@@ -1205,4 +1332,31 @@ model ImportKey {
   revokedAt  DateTime?
   lastUsedAt DateTime?
   createdAt  DateTime  @default(now())
+}
+
+// ───────────────────────── App do cliente ─────────────────────────
+
+model CustomerSession {
+  id         String   @id @default(uuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique
+  ip         String?
+  userAgent  String?
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
+}
+
+// Convite / redefinição de senha do app do cliente (o token só existe no link)
+model CustomerPortalToken {
+  id          String    @id @default(uuid())
+  customerId  String
+  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdById String
+  createdAt   DateTime  @default(now())
 }
