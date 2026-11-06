@@ -3,6 +3,7 @@ import type { Tx } from "./db";
 import type { SessionUser } from "./auth";
 import type { ImportEntity } from "./import-fields";
 import { audit } from "./audit";
+import { findCustomerByName, ensureProvisionalCustomer, rebuildOwnership } from "./ownership";
 import { stockEntry } from "./inventory";
 import { parseMoney } from "./format";
 import { isValidCNPJ, isValidCPF, isValidEmail, isValidPlate, isValidRenavam, isValidVIN, normalizeCNPJ, normalizePlate, onlyDigits } from "./validators";
@@ -130,7 +131,7 @@ export function checkRow(entity: ImportEntity, v: Record<string, string>): Check
           propulsion: PROPULSION.find(([re]) => re.test(t(v.fuel)))?.[1] ?? "GASOLINA", vin, renavam, engine: opt(v.engine),
           mileage: km && km > 0 ? Math.round(km) : 0, notes: opt(v.notes), legacyCode: opt(v.legacyCode),
           ownerDocument: onlyDigits(t(v.ownerDocument)).length === 11 && !/[A-Za-z]/.test(t(v.ownerDocument)) ? onlyDigits(t(v.ownerDocument)) : t(v.ownerDocument) ? normalizeCNPJ(t(v.ownerDocument)) : null,
-          ownerCode: opt(v.ownerCode), ownerName: opt(v.ownerName), ownerPhone: onlyDigits(t(v.ownerPhone)).slice(-8) || null,
+          ownerCode: opt(v.ownerCode), ownerName: opt(v.ownerName), ownerPhone: opt(v.ownerPhone),
         },
       };
     }
@@ -201,6 +202,7 @@ export function checkRow(entity: ImportEntity, v: Record<string, string>): Check
         data: {
           vin: vin && isValidVIN(vin) ? vin : null, legacyNumber, openedAt, closedAt: closedAt ?? openedAt, plate, km: km && km > 0 ? Math.round(km) : null, total,
           customerDocument: t(v.customerDocument) ? (onlyDigits(t(v.customerDocument)).length === 11 ? onlyDigits(t(v.customerDocument)) : normalizeCNPJ(t(v.customerDocument))) : null,
+          customerName: opt(v.customerName), customerPhone: opt(v.customerPhone),
           complaint: opt(v.complaint), services: opt(v.services), parts: opt(v.parts), technician: opt(v.technician), notes: opt(v.notes),
           cancelled: /cancel/i.test(t(v.situation)), situation: opt(v.situation),
         },
@@ -220,13 +222,28 @@ export async function stageRows(tx: Tx, jobId: string, entity: ImportEntity, row
     const messages = [...c.errors, ...c.warnings.map((w) => `Aviso: ${w}`)];
     let status: keyof typeof counts = c.errors.length ? "INVALIDO" : "VALIDO";
     if (status === "VALIDO" && c.key) {
-      if (inDb.has(c.key)) { status = "DUPLICADO"; messages.unshift(inDb.get(c.key)!); }
+      if (inDb.has(c.key) && entity === "VEICULOS") {
+        // Placa já cadastrada: se o dono mudou no SYSCAR, é troca de proprietário (o histórico do dono anterior fica)
+        const ref = await resolveRefs(tx, entity, c.data);
+        const cur = await tx.vehicle.findUnique({ where: { plate: c.key }, include: { customer: { select: { name: true } } } });
+        if (ref.error || !cur || ref.data?.customerId === cur.customerId) { status = "DUPLICADO"; messages.unshift(inDb.get(c.key)!); }
+        else {
+          Object.assign(c.data, ref.data, { transferVehicleId: cur.id });
+          messages.unshift(`Troca de proprietário: ${cur.customer.name} → ${ref.data?.ownerName}`);
+          if (ref.warning) messages.push(`Aviso: ${ref.warning}`);
+          if (!seen.has(c.key)) seen.set(c.key, r.rowNumber);
+          counts[status]++;
+          await tx.importRow.create({ data: { jobId, rowNumber: r.rowNumber, key: c.key, data: JSON.parse(JSON.stringify(c.data)), status, messages } });
+          continue;
+        }
+      }
+      else if (inDb.has(c.key)) { status = "DUPLICADO"; messages.unshift(inDb.get(c.key)!); }
       else if (seen.has(c.key)) { status = "DUPLICADO"; messages.unshift(`Repetido no arquivo (mesma chave da linha ${seen.get(c.key)})`); }
     }
     if (status === "VALIDO") {
       const ref = await resolveRefs(tx, entity, c.data);
       if (ref.error) { status = "INVALIDO"; messages.unshift(ref.error); }
-      else Object.assign(c.data, ref.data);
+      else { Object.assign(c.data, ref.data); if (ref.warning) messages.push(`Aviso: ${ref.warning}`); }
     }
     if (c.key && !seen.has(c.key)) seen.set(c.key, r.rowNumber);
     counts[status]++;
@@ -256,29 +273,43 @@ async function existingKeys(tx: Tx, entity: ImportEntity, keys: string[]) {
 }
 
 /** Resolve vínculos (proprietário do veículo, veículo da OS, fornecedor da peça). */
-async function resolveRefs(tx: Tx, entity: ImportEntity, d: Record<string, unknown>): Promise<{ error?: string; data?: Record<string, unknown> }> {
+type Owner = { data: { customerId?: string; provisionalOwner?: { name: string; phone: string | null }; ownerName: string }; warning?: string } | { error: string };
+
+/** Dono (ou cliente da OS): CPF/CNPJ → código SYSCAR → nome (+ telefone). Sem cadastro, vira cadastro provisório. */
+async function resolveOwner(tx: Tx, o: { document?: string | null; code?: string | null; name?: string | null; phone?: string | null }): Promise<Owner> {
+  let c = o.document ? await tx.customer.findUnique({ where: { document: o.document } }) : null;
+  if (!c && o.code) c = await tx.customer.findFirst({ where: { legacyCode: o.code } });
+  if (c) return { data: { customerId: c.id, ownerName: c.name } };
+  if (o.name) {
+    const m = await findCustomerByName(tx, o.name, o.phone);
+    if (m && "ambiguous" in m) return { error: `Há ${m.ambiguous} clientes chamados "${o.name}"; informe o telefone ou o CPF/CNPJ para decidir o proprietário.` };
+    if (m) return { data: { customerId: m.id, ownerName: m.name } };
+    return { data: { provisionalOwner: { name: o.name, phone: o.phone ?? null }, ownerName: o.name }, warning: `"${o.name}" não está entre os clientes: será criado um cadastro provisório (sem CPF/CNPJ) para completar depois` };
+  }
+  return { error: `Proprietário não encontrado (${o.document ?? `código ${o.code}`}). Importe os clientes antes.` };
+}
+
+async function resolveRefs(tx: Tx, entity: ImportEntity, d: Record<string, unknown>): Promise<{ error?: string; warning?: string; data?: Record<string, unknown> }> {
   if (entity === "VEICULOS") {
-    let c = d.ownerDocument ? await tx.customer.findUnique({ where: { document: d.ownerDocument as string } })
-      : d.ownerCode ? await tx.customer.findFirst({ where: { legacyCode: d.ownerCode as string } }) : null;
-    if (!c && d.ownerName) {
-      // Relatório de veículos do SYSCAR traz só o nome do cliente: aceita quando o nome é único (ou o telefone desempata)
-      const same = await tx.customer.findMany({ where: { name: { equals: d.ownerName as string, mode: "insensitive" } } });
-      const byPhone = d.ownerPhone ? same.filter((x) => [x.phone, x.whatsapp].some((p) => p && p.replace(/\D/g, "").endsWith(d.ownerPhone as string))) : [];
-      c = same.length === 1 ? same[0] : byPhone.length === 1 ? byPhone[0] : null;
-      if (!c && same.length > 1) return { error: `Há ${same.length} clientes chamados "${d.ownerName}"; não foi possível decidir o proprietário.` };
-    }
-    if (!c) return { error: `Proprietário não encontrado (${d.ownerDocument ?? (d.ownerCode ? `código ${d.ownerCode}` : d.ownerName)}). Importe os clientes antes.` };
-    return { data: { customerId: c.id, ownerName: c.name } };
+    const o = await resolveOwner(tx, { document: d.ownerDocument as string | null, code: d.ownerCode as string | null, name: d.ownerName as string | null, phone: d.ownerPhone as string | null });
+    if ("error" in o) return { error: o.error };
+    return { data: o.data, warning: o.warning };
   }
   if (entity === "OS") {
-    const v = await tx.vehicle.findUnique({ where: { plate: d.plate as string } });
+    // Placa; se não achar (placa trocada/Mercosul), o chassi
+    const v = await tx.vehicle.findUnique({ where: { plate: d.plate as string } }) ?? (d.vin ? await tx.vehicle.findFirst({ where: { vin: d.vin as string } }) : null);
     if (!v) return { error: `Veículo ${d.plate} não encontrado. Importe os veículos antes.` };
-    let customerId = v.customerId;
-    if (d.customerDocument) {
-      const c = await tx.customer.findUnique({ where: { document: d.customerDocument as string } });
-      if (c) customerId = c.id;
+    // Cliente da OS = quem era o cliente naquela data (pode ser dono anterior do carro)
+    if (d.customerDocument || d.customerName) {
+      const o = await resolveOwner(tx, { document: d.customerDocument as string | null, name: d.customerName as string | null, phone: d.customerPhone as string | null });
+      if (!("error" in o)) {
+        const other = o.data.customerId && o.data.customerId !== v.customerId;
+        const warning = [o.warning, (other || o.data.provisionalOwner) && `Cliente da OS (${o.data.ownerName}) diferente do proprietário atual — fica no histórico como atendimento ao dono/cliente da época`].filter(Boolean).join(". ") || undefined;
+        return { data: { vehicleId: v.id, customerId: o.data.customerId ?? null, provisionalOwner: o.data.provisionalOwner ?? null, customerLabel: o.data.ownerName }, warning };
+      }
+      if (/Há \d+ clientes/.test(o.error)) return { data: { vehicleId: v.id, customerId: v.customerId }, warning: `${o.error} OS atribuída ao proprietário atual do veículo.` };
     }
-    return { data: { vehicleId: v.id, customerId } };
+    return { data: { vehicleId: v.id, customerId: v.customerId } };
   }
   if (entity === "OS_ITENS") {
     const w = await tx.workOrder.findFirst({ where: { legacyNumber: d.legacyNumber as string }, select: { id: true, legacy: true, number: true, closedAt: true, openedAt: true } });
@@ -315,11 +346,21 @@ export async function importRow(tx: Tx, user: SessionUser, entity: ImportEntity,
       return s.id;
     }
     case "VEICULOS": {
+      const customerId = d.customerId ?? (await ensureProvisionalCustomer(tx, d.provisionalOwner.name, d.provisionalOwner.phone)).id;
+      if (d.transferVehicleId) {
+        const cur = await tx.vehicle.findUniqueOrThrow({ where: { id: d.transferVehicleId } });
+        await tx.vehicleOwnership.updateMany({ where: { vehicleId: cur.id, endedAt: null }, data: { endedAt: new Date() } });
+        await tx.vehicleOwnership.create({ data: { vehicleId: cur.id, customerId, source: "IMPORTACAO" } });
+        await tx.vehicle.update({ where: { id: cur.id }, data: { customerId, vin: cur.vin ?? d.vin, renavam: cur.renavam ?? d.renavam, color: cur.color ?? d.color, legacyCode: cur.legacyCode ?? d.legacyCode } });
+        await audit({ action: "TRANSFER", entity: "Vehicle", entityId: cur.id, userId: user.id, userName: user.name, before: { customerId: cur.customerId }, after: { customerId, via: "Importação SYSCAR" } }, tx);
+        await rebuildOwnership(tx, cur.id);
+        return `T:${cur.id}`;
+      }
       const v = await tx.vehicle.create({ data: {
-        customerId: d.customerId, plate: d.plate, make: d.make, model: d.model, version: d.version, yearMfg: d.yearMfg, yearModel: d.yearModel,
+        customerId, plate: d.plate, make: d.make, model: d.model, version: d.version, yearMfg: d.yearMfg, yearModel: d.yearModel,
         color: d.color, propulsion: d.propulsion, vin: d.vin, renavam: d.renavam, engine: d.engine, mileage: d.mileage, notes: d.notes, legacyCode: d.legacyCode,
       } });
-      await tx.vehicleOwnership.create({ data: { vehicleId: v.id, customerId: d.customerId } });
+      await tx.vehicleOwnership.create({ data: { vehicleId: v.id, customerId, source: "IMPORTACAO" } });
       if (d.mileage) await tx.odometerReading.create({ data: { vehicleId: v.id, km: d.mileage, source: "IMPORTACAO", userId: user.id } });
       return v.id;
     }
@@ -351,10 +392,11 @@ export async function importRow(tx: Tx, user: SessionUser, entity: ImportEntity,
       return `P:${p.id}`;
     }
     case "OS": {
+      const customerId = d.customerId ?? (d.provisionalOwner ? (await ensureProvisionalCustomer(tx, d.provisionalOwner.name, d.provisionalOwner.phone)).id : (await tx.vehicle.findUniqueOrThrow({ where: { id: d.vehicleId } })).customerId);
       const notes = [d.services && `Serviços: ${d.services}`, d.parts && `Peças: ${d.parts}`, d.technician && `Técnico: ${d.technician}`, d.situation && `Situação no SYSCAR: ${d.situation}`, d.notes].filter(Boolean).join("\n");
       const w = await tx.workOrder.create({ data: {
         number: `SYS-${d.legacyNumber}`, legacy: true, legacyNumber: d.legacyNumber, legacyTotal: d.total, branchId: user.branchId,
-        customerId: d.customerId, vehicleId: d.vehicleId, status: d.cancelled ? "CANCELADA" : "ENTREGUE", openedAt: new Date(d.openedAt),
+        customerId, vehicleId: d.vehicleId, status: d.cancelled ? "CANCELADA" : "ENTREGUE", openedAt: new Date(d.openedAt),
         closedAt: new Date(d.closedAt), complaint: d.complaint ?? d.services, notes: notes || null, createdById: user.id,
         cancelReason: d.cancelled ? "Cancelada no SYSCAR" : null,
       } });
@@ -382,6 +424,7 @@ export async function revertRow(tx: Tx, user: SessionUser, entity: ImportEntity,
       return null;
     }
     case "VEICULOS": {
+      if (id.startsWith("T:")) return "troca de proprietário não é desfeita automaticamente — use “Transferir” na ficha do veículo";
       const [w, a] = await Promise.all([tx.workOrder.count({ where: { vehicleId: id } }), tx.appointment.count({ where: { vehicleId: id } })]);
       if (w + a) return "veículo já tem OS ou agendamentos";
       await tx.odometerReading.deleteMany({ where: { vehicleId: id } });
@@ -419,6 +462,7 @@ export async function revertRow(tx: Tx, user: SessionUser, entity: ImportEntity,
       if (items) return "OS tem itens importados — reverta antes o lote de itens das OS";
       await tx.odometerReading.deleteMany({ where: { workOrderId: id } });
       await tx.workOrder.delete({ where: { id } });
+      await rebuildOwnership(tx, w.vehicleId);
       return null;
     }
   }

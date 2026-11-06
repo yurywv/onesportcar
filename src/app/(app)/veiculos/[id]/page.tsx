@@ -8,7 +8,7 @@ import { formatPlate } from "@/lib/validators";
 import { PageHeader, Section, Empty, StatusBadge, DL } from "@/components/ui";
 import { ActionForm, Submit } from "@/components/forms";
 import { VehicleForm } from "../vehicle-form";
-import { updateVehicle, transferVehicle, addOdometer } from "../actions";
+import { updateVehicle, transferVehicle, addOdometer, rebuildVehicleOwners } from "../actions";
 
 const PROP_LABEL: Record<string, string> = { GASOLINA: "Gasolina", FLEX: "Flex", ETANOL: "Etanol", DIESEL: "Diesel", HIBRIDO: "Híbrido", HIBRIDO_PLUGIN: "Híbrido plug-in", ELETRICO: "Elétrico" };
 
@@ -22,7 +22,7 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
       ownerships: { include: { customer: true }, orderBy: { startedAt: "desc" } },
       odometer: { orderBy: { createdAt: "desc" }, take: 10 },
       workOrders: {
-        include: { checkIn: true, services: { where: { status: { not: "CANCELADO" } } }, parts: { where: { status: "APLICADA" } } },
+        include: { customer: { select: { id: true, name: true } }, checkIn: true, services: { where: { status: { not: "CANCELADO" } } }, parts: { where: { status: "APLICADA" } } },
         orderBy: { openedAt: "desc" },
       },
     },
@@ -30,6 +30,9 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
   if (!v) notFound();
   const edit = can(user.role, "veiculos:editar");
   const kmByOs = new Map((await db.odometerReading.findMany({ where: { vehicleId: v.id, workOrderId: { not: null } } })).map((o) => [o.workOrderId!, o.km]));
+  const lastOs = v.workOrders.find((w) => w.status !== "CANCELADA");
+  const lastOsOtherCustomer = lastOs && lastOs.customerId !== v.customerId ? lastOs.customer.name : null;
+  const SOURCE: Record<string, string> = { SISTEMA: "registrado no sistema", IMPORTACAO: "cadastro do SYSCAR", HISTORICO_OS: "deduzido das OS do SYSCAR" };
   const customers = edit ? await db.customer.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
 
   return (
@@ -54,6 +57,7 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
                       <Link href={`/os/${w.id}`} className="link">{w.number}</Link>
                       <StatusBadge status={w.status} />
                       {w.legacy && <span className="badge">SYSCAR</span>}
+                      {w.customerId !== v.customerId && <Link href={`/clientes/${w.customerId}`} className="badge badge-info" title="Cliente desta OS diferente do proprietário atual">{w.customer.name}</Link>}
                     </div>
                     <p className="mt-1 text-sm whitespace-pre-line">{w.services.map((s) => s.description).join(" · ") || (w.legacy ? w.notes : null) || w.complaint || "—"}</p>
                     {w.parts.length > 0 && <p className="text-xs text-muted">Peças: {w.parts.map((p) => p.description).join(", ")}</p>}
@@ -91,11 +95,22 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
             )}
           </Section>
           <Section title="Proprietários">
-            <ul className="mb-3 space-y-1 text-sm">
+            {lastOsOtherCustomer && <p className="alert alert-warn mb-2 text-xs">A última OS foi feita para {lastOsOtherCustomer}, não para o proprietário atual. Confira se o veículo foi vendido e, se for o caso, transfira.</p>}
+            <ol className="mb-3 space-y-2 text-sm">
               {v.ownerships.map((o) => (
-                <li key={o.id}>{o.customer.name} <span className="text-xs text-muted">{date(o.startedAt)} → {o.endedAt ? date(o.endedAt) : "atual"}</span></li>
+                <li key={o.id} className={o.endedAt ? "text-muted" : ""}>
+                  <Link href={`/clientes/${o.customerId}`} className={o.endedAt ? "" : "link font-semibold"}>{o.customer.name}</Link>
+                  {o.customer.document.startsWith("SYSCAR-") && <span className="badge badge-warn ml-1">cadastro provisório</span>}
+                  <div className="text-xs text-muted">{o.source === "HISTORICO_OS" ? "desde a 1ª OS em " : ""}{date(o.startedAt)} → {o.endedAt ? date(o.endedAt) : "atual"} · {SOURCE[o.source] ?? o.source} · {v.workOrders.filter((w) => w.customerId === o.customerId).length} OS</div>
+                </li>
               ))}
-            </ul>
+            </ol>
+            {edit && v.workOrders.some((w) => w.legacy) && (
+              <ActionForm action={rebuildVehicleOwners} className="mb-3">
+                <input type="hidden" name="id" value={v.id} />
+                <Submit className="btn btn-sm w-full">Recalcular donos pelo histórico de OS</Submit>
+              </ActionForm>
+            )}
             {edit && (
               <ActionForm action={transferVehicle} className="space-y-2" confirm="Confirmar a troca de proprietário?">
                 <input type="hidden" name="id" value={v.id} />

@@ -24,6 +24,7 @@ export default async function PortalHome() {
     }),
     db.appointment.findMany({ where: { customerId: c.id, workOrderId: null, status: { in: ["AGENDADO", "CONFIRMADO"] }, startsAt: { gte: new Date(Date.now() - 3 * 3600_000) } }, include: { vehicle: true }, orderBy: { startsAt: "asc" } }),
   ]);
+  const past = await db.vehicle.findMany({ where: { customerId: { not: c.id }, OR: [{ ownerships: { some: { customerId: c.id } } }, { workOrders: { some: { customerId: c.id } } }] }, orderBy: { model: "asc" } });
   const live = open[0] ? await camerasForPhase(open[0].id, phaseOf(open[0].status), { customer: true }) : [];
 
   return (
@@ -86,6 +87,17 @@ export default async function PortalHome() {
           </ul>
         ) : <p className="card card-pad text-sm text-muted">Nenhum veículo cadastrado. Fale com a recepção.</p>}
       </section>
+
+      {past.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">Veículos que já foram seus</h2>
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {past.map((v) => (
+              <li key={v.id}><Link href={`/cliente/veiculos/${v.id}`} className="card card-pad block text-sm hover:ring-1 hover:ring-accent"><b>{v.make} {v.model}</b> <span className="plate">{formatPlate(v.plate)}</span><div className="text-xs text-muted">Seus atendimentos neste carro →</div></Link></li>
+            ))}
+          </ul>
+        </section>
+      )}
       <p className="text-center text-xs text-muted">Atualizado em {date(new Date())}</p>
     </div>
   );

@@ -215,6 +215,12 @@ model VehicleOwnership {
   customer   Customer  @relation(fields: [customerId], references: [id])
   startedAt  DateTime  @default(now())
   endedAt    DateTime?
+  // SISTEMA (cadastro/transferência feita aqui), IMPORTACAO (cadastro do SYSCAR),
+  // HISTORICO_OS (período deduzido das OS do SYSCAR — datas aproximadas: 1ª OS de cada dono)
+  source     String    @default("SISTEMA")
+
+  @@index([vehicleId])
+  @@index([customerId])
 }
 
 model OdometerReading {

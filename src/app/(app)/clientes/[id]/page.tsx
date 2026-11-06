@@ -18,6 +18,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
     where: { id },
     include: {
       vehicles: { orderBy: { createdAt: "asc" } },
+      ownerships: { where: { endedAt: { not: null } }, include: { vehicle: true }, orderBy: { endedAt: "desc" } },
       workOrders: { include: { vehicle: true }, orderBy: { openedAt: "desc" }, take: 30 },
       appointments: { where: { startsAt: { gte: new Date() } }, include: { vehicle: true }, orderBy: { startsAt: "asc" } },
     },
@@ -29,7 +30,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
     <>
       <PageHeader
         title={c.name}
-        subtitle={<>{c.type === "PF" ? "Pessoa física" : "Pessoa jurídica"}{docs && <> · {formatDocument(c.document)}</>}{!c.active && " · INATIVO"}</>}
+        subtitle={<>{c.type === "PF" ? "Pessoa física" : "Pessoa jurídica"}{c.document.startsWith("SYSCAR-") ? <> · <span className="badge badge-warn">Cadastro provisório do SYSCAR — sem CPF/CNPJ</span></> : docs && <> · {formatDocument(c.document)}</>}{!c.active && " · INATIVO"}</>}
         back={<Link href="/clientes" className="link text-xs">← Clientes</Link>}
         actions={<>
           {can(user.role, "veiculos:editar") && <Link href={`/veiculos/novo?cliente=${c.id}`} className="btn">Adicionar veículo</Link>}
@@ -49,6 +50,19 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
                 ))}
               </ul>
             ) : <Empty>Nenhum veículo vinculado.</Empty>}
+            {c.ownerships.filter((o) => o.vehicle.customerId !== c.id).length > 0 && (
+              <>
+                <h3 className="mt-4 mb-1 text-xs font-semibold uppercase tracking-wider text-muted">Veículos que já foram deste cliente</h3>
+                <ul className="divide-y divide-line text-sm">
+                  {c.ownerships.filter((o) => o.vehicle.customerId !== c.id).map((o) => (
+                    <li key={o.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                      <Link href={`/veiculos/${o.vehicleId}`} className="link">{o.vehicle.make} {o.vehicle.model}</Link>
+                      <span className="flex items-center gap-2 text-muted"><Plate plate={o.vehicle.plate} /> até {date(o.endedAt)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </Section>
           <Section title="Histórico de atendimentos">
             {c.workOrders.length ? (

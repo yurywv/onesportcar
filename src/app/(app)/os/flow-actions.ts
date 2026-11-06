@@ -214,6 +214,7 @@ export async function inviteCustomer(_: ActionState, fd: FormData): Promise<Acti
     const user = await assertUser("app_cliente:convidar");
     const customerId = req(fd, "customerId", "Cliente");
     const c = await db.customer.findUniqueOrThrow({ where: { id: customerId } });
+    if (c.document.startsWith("SYSCAR-")) throw new RuleError("Cadastro provisório (veio do SYSCAR sem CPF/CNPJ): complete o documento antes de convidar — o cliente entra no app com ele.");
     const token = await db.$transaction(async (tx) => {
       const t = await createPortalInvite(tx, customerId, user.id);
       await audit({ action: "INVITE", entity: "CustomerPortal", entityId: customerId, userId: user.id, userName: user.name }, tx);

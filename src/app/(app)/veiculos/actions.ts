@@ -1,4 +1,5 @@
 "use server";
+import { rebuildOwnership } from "@/lib/ownership";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { Propulsion } from "@prisma/client";
@@ -104,5 +105,20 @@ export async function addOdometer(_: ActionState, fd: FormData): Promise<ActionS
     });
     revalidatePath(`/veiculos/${id}`);
     return "Quilometragem registrada.";
+  });
+}
+
+/** Recalcula os períodos de cada proprietário a partir das OS (útil após importar o histórico do SYSCAR). */
+export async function rebuildVehicleOwners(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const user = await assertUser("veiculos:editar");
+    const id = String(fd.get("id"));
+    const r = await db.$transaction(async (tx) => {
+      const res = await rebuildOwnership(tx, id);
+      await audit({ action: "UPDATE", entity: "VehicleOwnership", entityId: id, userId: user.id, userName: user.name, after: { rebuilt: res.owners } }, tx);
+      return res;
+    });
+    revalidatePath(`/veiculos/${id}`);
+    return `Histórico recalculado: ${r.owners} proprietário(s).`;
   });
 }
