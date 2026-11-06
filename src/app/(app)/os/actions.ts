@@ -18,6 +18,8 @@ import { startTimer, stopTimer, woTotals } from "@/lib/wo";
 import { receiveOnWorkOrder, billWorkOrder, parseTerms } from "@/lib/finance";
 import { CHECKIN_CONDITIONS, INSPECTION_TEMPLATES, QC_ITEMS } from "@/lib/checklists";
 import { normalizePlate } from "@/lib/validators";
+import { ensurePhaseCameras } from "@/lib/phases";
+import { parseDiagItems } from "@/lib/quote";
 import { openCounterWorkOrder, parseItemLines, addParsedItems } from "@/lib/counter";
 
 const refresh = (id: string) => { revalidatePath(`/os/${id}`); revalidatePath("/oficina/kanban"); revalidatePath("/oficina/minhas"); };
@@ -94,6 +96,7 @@ export async function createCheckIn(_: ActionState, fd: FormData): Promise<Actio
         },
       });
       await tx.workOrderStatusHistory.create({ data: { workOrderId: wo.id, toStatus: "CHECK_IN", userId: user.id, userName: user.name, reason: "Check-in iniciado" } });
+      await ensurePhaseCameras(tx, wo.id, "CHECK_IN");
       if (appointmentId) await tx.appointment.update({ where: { id: appointmentId }, data: { workOrderId: wo.id, status: "CHEGOU" } });
       const ci = await tx.checkIn.create({
         data: {
@@ -222,12 +225,21 @@ export async function saveDiagnostic(_: ActionState, fd: FormData): Promise<Acti
         data: {
           workOrderId: woId, technicianId: user.id, technicianName: user.name, diagnosis: req(fd, "diagnosis", "Diagnóstico"),
           tests: str(fd, "tests"), faultCodes: str(fd, "faultCodes"), scanTool: str(fd, "scanTool"), probableCause: str(fd, "probableCause"),
-          solution: str(fd, "solution"), finishedAt: new Date(),
+          solution: str(fd, "solution"), laborMinutes: int(fd, "laborMinutes"), finishedAt: new Date(),
         },
       });
+      const items = parseDiagItems(str(fd, "items"));
+      if (items.length) {
+        const last = await tx.diagnosticItem.count({ where: { workOrderId: woId } });
+        await tx.diagnosticItem.createMany({ data: items.map((it, i) => ({ ...it, workOrderId: woId, diagnosticId: d.id, createdById: user.id, sortOrder: last + i })) });
+      }
       await audit({ action: "CREATE", entity: "Diagnostic", entityId: d.id, userId: user.id, userName: user.name, after: { workOrderId: woId } }, tx);
-      if (bool(fd, "toEstimate") && (await tx.workOrder.findUniqueOrThrow({ where: { id: woId } })).status === "EM_DIAGNOSTICO")
+      if (bool(fd, "toEstimate") && (await tx.workOrder.findUniqueOrThrow({ where: { id: woId } })).status === "EM_DIAGNOSTICO") {
         await transition(tx, woId, "ORCAMENTO", user, { reason: "Diagnóstico concluído" });
+        // Peças levantadas vão para a fila do comprador; só mão de obra vai direto ao comercial.
+        const toQuote = await tx.diagnosticItem.count({ where: { workOrderId: woId, type: { not: "SERVICO" }, unitCost: null } });
+        await tx.workOrder.update({ where: { id: woId }, data: { quoteStatus: toQuote ? "PENDENTE" : "CONCLUIDA", quoteDoneAt: toQuote ? null : new Date() } });
+      }
     });
     refresh(woId);
     return "Diagnóstico registrado.";

@@ -4,6 +4,10 @@ import { INSPECTION_TEMPLATES } from "@/lib/checklists";
 import { Section, Field, Empty } from "@/components/ui";
 import { ActionForm, Submit } from "@/components/forms";
 import { startInspection, saveInspection, saveDiagnostic } from "../actions";
+import { addDiagnosticItems, removeDiagnosticItem } from "../flow-actions";
+import { DiagItemsEditor } from "@/components/diag-items-editor";
+import { ITEM_TYPE_LABEL } from "@/lib/estimate";
+import { minutesLabel, money } from "@/lib/format";
 import type { TabProps } from "./types";
 
 const ST = [["OK", "OK"], ["ATENCAO", "Atenção"], ["RECOMENDADO", "Recomendado"], ["URGENTE", "Urgente"], ["NA", "N/A"]];
@@ -64,6 +68,7 @@ export function TabDiagnostico({ wo, user }: TabProps) {
         {wo.diagnostics.map((d) => (
           <Section key={d.id} title={`Diagnóstico — ${d.technicianName}`} actions={<span className="text-xs text-muted">{dateTime(d.finishedAt ?? d.startedAt)}</span>}>
             <dl className="space-y-2 text-sm">
+              {d.laborMinutes ? <div><dt className="text-xs text-muted">Esforço estimado</dt><dd>{minutesLabel(d.laborMinutes)}</dd></div> : null}
               {([["Diagnóstico", d.diagnosis], ["Testes realizados", d.tests], ["Códigos de falha", d.faultCodes], ["Ferramenta / sessão", d.scanTool], ["Causa provável", d.probableCause], ["Solução recomendada", d.solution]] as const).filter(([, v]) => v).map(([k, v]) => (
                 <div key={k}><dt className="text-xs text-muted">{k}</dt><dd className="whitespace-pre-wrap">{v}</dd></div>
               ))}
@@ -86,6 +91,10 @@ export function TabDiagnostico({ wo, user }: TabProps) {
                 <Field label="Causa provável"><textarea name="probableCause" className="textarea" /></Field>
                 <Field label="Solução recomendada"><textarea name="solution" className="textarea" /></Field>
               </div>
+              <Field label="Esforço estimado (minutos de mão de obra)" hint="Total da mão de obra. Detalhe por serviço abaixo."><input name="laborMinutes" className="input" inputMode="numeric" placeholder="Ex.: 180" /></Field>
+              <Field label="Serviços e peças necessários" hint="As peças vão para o comprador cotar; o comercial precifica e envia ao cliente (sem o diagnóstico detalhado).">
+                <DiagItemsEditor />
+              </Field>
               {["AGUARDANDO_DIAGNOSTICO", "EM_DIAGNOSTICO"].includes(wo.status) && (
                 <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="toEstimate" defaultChecked /> Diagnóstico concluído — enviar OS para orçamento</label>
               )}
@@ -93,7 +102,49 @@ export function TabDiagnostico({ wo, user }: TabProps) {
             </ActionForm>
           </Section>
         ) : !wo.diagnostics.length && <Empty>Nenhum diagnóstico registrado.</Empty>}
+        <DiagItems wo={wo} canDo={canDo} costs={can(user.role, "orcamento:ver_custos")} />
       </div>
     </div>
+  );
+}
+
+const ITEM_STAGE = ["AGUARDANDO_DIAGNOSTICO", "EM_DIAGNOSTICO", "ORCAMENTO"];
+
+function DiagItems({ wo, canDo, costs }: { wo: TabProps["wo"]; canDo: boolean; costs: boolean }) {
+  const items = wo.diagnosticItems;
+  const editable = canDo && ITEM_STAGE.includes(wo.status);
+  if (!items.length && !editable) return null;
+  const labor = items.filter((i) => i.type === "SERVICO").reduce((s, i) => s + (i.minutes ?? 0), 0);
+  return (
+    <Section title="Serviços e peças do diagnóstico" actions={
+      wo.quoteStatus === "PENDENTE" ? <span className="badge badge-warn">Em cotação (compras)</span>
+        : wo.quoteStatus === "CONCLUIDA" ? <span className="badge badge-ok">Cotação concluída</span> : null
+    }>
+      {items.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="table">
+            <thead><tr><th>Item</th><th className="text-right">Qtd / tempo</th><th>Cotação</th><th /></tr></thead>
+            <tbody>
+              {items.map((i) => (
+                <tr key={i.id}>
+                  <td><span className="text-xs text-muted">{ITEM_TYPE_LABEL[i.type]}{i.reference && ` · ${i.reference}`}</span><div>{i.description}</div>{i.notes && <div className="text-xs text-muted">{i.notes}</div>}</td>
+                  <td className="text-right tabular-nums">{i.type === "SERVICO" ? minutesLabel(i.minutes ?? 0) : i.quantity}</td>
+                  <td className="text-xs">{i.type === "SERVICO" ? "—" : i.unitCost != null ? <>{i.supplierName ?? "cotado"}{costs && ` · ${money(i.unitCost)}`}{i.leadTimeDays != null && ` · ${i.leadTimeDays}d`}</> : <span className="badge badge-warn">aguardando</span>}{i.estimateItemId && <span className="badge badge-ok ml-1">no orçamento</span>}</td>
+                  <td>{editable && !i.estimateItemId && <ActionForm action={removeDiagnosticItem}><input type="hidden" name="id" value={i.id} /><Submit className="btn btn-ghost btn-sm text-danger">remover</Submit></ActionForm>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {labor > 0 && <p className="mt-2 text-xs text-muted">Mão de obra estimada: {minutesLabel(labor)}</p>}
+        </div>
+      )}
+      {editable && wo.diagnostics.length > 0 && (
+        <ActionForm action={addDiagnosticItems} className="mt-3 space-y-2" reset>
+          <input type="hidden" name="workOrderId" value={wo.id} />
+          <DiagItemsEditor />
+          <Submit className="btn">Adicionar itens</Submit>
+        </ActionForm>
+      )}
+    </Section>
   );
 }

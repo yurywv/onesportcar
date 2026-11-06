@@ -25,6 +25,8 @@ function monthStart(d = new Date()) {
 export default async function Dashboard() {
   const user = await requireUser();
   if (user.role === "TECNICO") redirect("/oficina/minhas");
+  if (user.role === "RECEPCAO") redirect("/recepcao");
+  if (user.role === "COMPRADOR") redirect("/compras/cotacoes");
   if (!can(user.role, "dashboard:ver")) redirect("/os");
   const showMoney = can(user.role, "financeiro:ver_valores");
   const { start, end } = dayBounds();

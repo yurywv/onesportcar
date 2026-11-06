@@ -37,7 +37,7 @@ export function FormMessage({ state }: { state: ActionState }) {
     return (
       <div role="status" className="alert alert-ok mt-3" key={state.at}>
         {state.ok}
-        {state.data?.link && <LinkBox link={state.data.link} />}
+        {state.data?.link && <LinkBox link={state.data.link} share={state.data.share} />}
         {state.data?.key && <input readOnly value={state.data.key} className="input mt-2 font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />}
       </div>
     );
@@ -53,12 +53,12 @@ export function Submit({ children, className = "btn btn-primary", name, value, d
   );
 }
 
-function LinkBox({ link }: { link: string }) {
+function LinkBox({ link, share }: { link: string; share?: string }) {
   return (
     <div className="mt-2 flex flex-col gap-2 sm:flex-row">
       <input readOnly value={link} className="input font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
       <button type="button" className="btn btn-sm" onClick={() => navigator.clipboard?.writeText(link)}>Copiar</button>
-      <a className="btn btn-sm" target="_blank" rel="noreferrer" href={`https://wa.me/?text=${encodeURIComponent("Seu orçamento OneSportcar está disponível para aprovação: " + link)}`}>WhatsApp</a>
+      <a className="btn btn-sm" target="_blank" rel="noreferrer" href={`https://wa.me/?text=${encodeURIComponent(share ?? "Seu orçamento OneSportcar está disponível para aprovação: " + link)}`}>WhatsApp</a>
     </div>
   );
 }

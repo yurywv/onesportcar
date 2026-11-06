@@ -15,7 +15,7 @@ export default async function ApprovePage({ params }: { params: Promise<{ token:
   const { token } = await params;
   const link = await db.approvalLink.findUnique({
     where: { tokenHash: sha256(token) },
-    include: { version: { include: { approvals: true, estimate: { include: { workOrder: { include: { vehicle: true, customer: true, diagnostics: true } } } } } } },
+    include: { version: { include: { approvals: true, estimate: { include: { workOrder: { include: { vehicle: true, customer: true } } } } } } },
   });
   const shell = (children: React.ReactNode) => (
     <main className="mx-auto max-w-2xl px-4 py-8">
@@ -35,14 +35,12 @@ export default async function ApprovePage({ params }: { params: Promise<{ token:
   const wo = v.estimate.workOrder;
   const snap = v.snapshot as unknown as Snapshot;
   const decision = new Map(v.approvals.map((a) => [a.itemId, a.decision]));
-  const diag = wo.diagnostics.at(-1);
 
   return shell(
     <>
       <section className="card card-pad mb-4">
         <h1 className="text-lg font-semibold">{wo.vehicle.make} {wo.vehicle.model} <span className="plate">{formatPlate(wo.vehicle.plate)}</span></h1>
         <p className="text-sm text-muted">{wo.customer.name.split(" ")[0]}, este é o orçamento {v.estimate.number} (versão {v.version}) da {wo.number}.</p>
-        {diag && <div className="mt-3 rounded-lg bg-surface-2 p-3 text-sm"><div className="text-xs font-semibold uppercase tracking-wider text-muted">Diagnóstico</div>{diag.diagnosis}</div>}
       </section>
       {answered ? (
         <section className="card card-pad">

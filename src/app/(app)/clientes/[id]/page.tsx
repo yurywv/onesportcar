@@ -8,6 +8,8 @@ import { formatDocument } from "@/lib/validators";
 import { PageHeader, Section, Empty, Plate, StatusBadge, DL } from "@/components/ui";
 import { CustomerForm } from "../customer-form";
 import { updateCustomer } from "../actions";
+import { ActionForm, Submit } from "@/components/forms";
+import { inviteCustomer } from "../../os/flow-actions";
 
 export default async function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser("clientes:ver");
@@ -83,6 +85,16 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
               ["Consentimento marketing", c.consentMarketing ? `Sim (${date(c.consentAt)})` : "Não"],
             ]} />
           </Section>
+          {can(user.role, "app_cliente:convidar") && (
+            <Section title="App do cliente">
+              <p className="text-sm">{c.portalActivatedAt ? <>Ativo desde {date(c.portalActivatedAt)}{c.portalLastLoginAt && <> · último acesso {dateTime(c.portalLastLoginAt)}</>}</> : "Ainda não ativado."}</p>
+              <p className="mt-1 text-xs text-muted">O cliente entra com CPF/CNPJ e senha em /cliente: agenda, acompanha o check-in com fotos, aprova orçamentos e assiste às câmeras da fase atual.</p>
+              <ActionForm action={inviteCustomer} className="mt-3">
+                <input type="hidden" name="customerId" value={c.id} />
+                <Submit className="btn">{c.portalActivatedAt ? "Gerar link para nova senha" : "Gerar convite de acesso"}</Submit>
+              </ActionForm>
+            </Section>
+          )}
           <Section title="Próximos agendamentos">
             {c.appointments.length ? (
               <ul className="space-y-2 text-sm">{c.appointments.map((a) => <li key={a.id}>{dateTime(a.startsAt)} · {a.vehicle.model} · {a.services}</li>)}</ul>

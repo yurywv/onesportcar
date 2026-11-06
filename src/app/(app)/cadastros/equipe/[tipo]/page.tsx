@@ -20,7 +20,7 @@ import { ActionForm, Submit } from "@/components/forms";
 
 const TYPES = {
   mecanicos: { title: "Mecânicos", one: "mecânico", roles: ["TECNICO"] as Role[], defaultRole: "TECNICO" as Role, where: { role: "TECNICO" } as Prisma.UserWhereInput },
-  vendedores: { title: "Vendedores", one: "vendedor", roles: ["CONSULTOR", "GESTOR", "CAIXA"] as Role[], defaultRole: "CONSULTOR" as Role, where: { OR: [{ isSeller: true }, { role: "CONSULTOR" }] } as Prisma.UserWhereInput },
+  vendedores: { title: "Vendedores", one: "vendedor", roles: ["CONSULTOR", "RECEPCAO", "GESTOR", "CAIXA"] as Role[], defaultRole: "CONSULTOR" as Role, where: { OR: [{ isSeller: true }, { role: { in: ["CONSULTOR", "RECEPCAO"] } }] } as Prisma.UserWhereInput },
   administradores: { title: "Administradores", one: "administrador", roles: ["ADMIN", "GESTOR", "FINANCEIRO", "AUDITOR"] as Role[], defaultRole: "GESTOR" as Role, where: { role: { in: ["ADMIN", "GESTOR"] } } as Prisma.UserWhereInput },
 } as const;
 type Tipo = keyof typeof TYPES;

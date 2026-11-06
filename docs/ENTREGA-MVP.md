@@ -82,3 +82,24 @@ Hospedagem: Vercel (time Govertech, região `gru1` São Paulo) · Banco: Neon Po
 3. Na Vercel, criar `FISCAL_TOKEN_HOMOLOGACAO` (e depois `FISCAL_TOKEN_PRODUCAO`).
 4. Em `Cadastros → Emitente fiscal`, conferir IM, IE, código de tributação municipal, NBS e próximo número da DPS (depois da última nota do SYSCAR). No painel da Focus, NF-e série 1, próximo nº 14.
 5. Emitir algumas notas em homologação, validar com a contabilidade e só então mudar o ambiente para Produção.
+
+---
+
+# Entrega 05/11/2026 — Suíte por perfil, app do cliente e câmeras por fase
+
+| Perfil | Onde | O que faz |
+|---|---|---|
+| **Cliente** | `/cliente` (instalável no celular) | Entra com CPF/CNPJ + senha (convite gerado pela recepção). Agenda serviço ou diagnóstico, vê histórico de cada veículo, acompanha a OS por etapas, vê o check-in com fotos, aprova/recusa o orçamento item a item (aceite eletrônico com IP/aparelho) e assiste às câmeras da etapa atual. **Nunca vê o diagnóstico técnico.** |
+| **Recepção** (novo perfil `RECEPCAO`) | `/recepcao` | Chegadas do dia, pedidos feitos pelo app, check-ins pendentes (fotos/assinatura), prontos para entrega. Tira as fotos do check-in na aba **Fotos e câmeras** da OS. Gera o convite do app na ficha do cliente. |
+| **Mecânico** | OS → Inspeção e diagnóstico | Diagnóstico + **esforço estimado** + lista de **serviços (com tempo) e peças (com part number)**. Ao concluir, as peças vão para o comprador. |
+| **Comprador** | `/compras/cotacoes` | Custo, fornecedor, prazo e vínculo com o estoque de cada peça. “Concluir” envia ao comercial. Vê só peças e observação técnica — não o diagnóstico. |
+| **Comercial** | `/comercial` e OS → Cotação e precificação | Valor da hora × tempo para serviços; **margem (markup) sobre o custo** das peças, por item ou padrão; preço manual opcional. Gera o orçamento, revisa e envia. Com a aprovação do cliente, a OS segue para execução (ou aguardando peças). |
+
+## Câmeras
+- Cadastro em `Administração → Câmeras`: tipo **HLS** (.m3u8), **player embutido** (iframe do NVR/nuvem), **MJPEG** ou **imagem atualizada** (SNAPSHOT — buscada pelo servidor, pode ter usuário/senha).
+- Cada câmera é marcada como padrão de uma ou mais fases: agendamento, check-in, diagnóstico, orçamento, execução, lavagem, check-out.
+- Ao entrar em cada fase, a OS recebe as câmeras padrão da fase (fica registrado em `WorkOrderCamera`). Na aba **Fotos e câmeras** da OS dá para trocar (ex.: o carro está no box 3).
+- O cliente só vê a câmera da fase atual da OS dele, e só enquanto a OS está aberta.
+- Vídeo exibido no navegador precisa ser **HTTPS** e sem senha na URL. Restrinja as origens com a variável `CAMERA_ORIGINS` (ex.: `https://cam.onesportcar.com.br`); sem ela, o CSP aceita qualquer origem HTTPS para mídia/iframe.
+
+Migration `app_cliente_cotacao_cameras` (aplicada no build). Testes: 32 passando + roteiro ponta a ponta (cliente → recepção → mecânico → comprador → comercial → aprovação no app).

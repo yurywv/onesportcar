@@ -40,6 +40,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </label>
           <Submit className="btn btn-primary w-full">Entrar</Submit>
         </ActionForm>
+        <p className="mt-4 text-center text-sm"><a href="/cliente/entrar" className="link">Sou cliente — acompanhar meu carro</a></p>
         <p className="mt-6 text-center text-xs text-muted">Acesso restrito a colaboradores autorizados. Todas as ações são registradas.</p>
       </div>
     </main>

@@ -118,7 +118,8 @@ export default async function Agenda({ searchParams }: { searchParams: Promise<{
                       </div>
                       <div className="mt-1 font-medium">{a.vehicle.model} <Plate plate={a.vehicle.plate} /></div>
                       <div className="truncate text-xs text-muted">{a.customer.name}</div>
-                      <div className="truncate text-xs">{a.services}</div>
+                      <div className="truncate text-xs">{a.kind === "DIAGNOSTICO" && <span className="badge badge-info mr-1">Diagnóstico</span>}{a.origin === "PORTAL" && <span className="badge badge-accent mr-1">App do cliente</span>}{a.services}</div>
+                      {a.complaint && <div className="line-clamp-2 text-xs text-muted">{a.complaint}</div>}
                       <div className="mt-1 text-xs text-muted">{a.bay?.code ?? "sem box"} · {a.technicianId ? names.get(a.technicianId) : "técnico a definir"}{a.pickup && " · leva-e-traz"}</div>
                       {canEdit && !a.workOrder && ["AGENDADO", "CONFIRMADO"].includes(a.status) && (
                         <div className="mt-2 flex flex-wrap gap-1">

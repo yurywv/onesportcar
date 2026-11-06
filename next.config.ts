@@ -1,13 +1,18 @@
 import type { NextConfig } from "next";
 
 const isProd = process.env.NODE_ENV === "production";
+// Origens das câmeras (player do NVR/nuvem, HLS, imagens). Ex.: "https://cam.onesportcar.com.br https://*.cloudcam.com".
+// Sem configuração, aceita qualquer origem HTTPS só para mídia/iframe/imagem/conexão.
+const cams = (process.env.CAMERA_ORIGINS ?? "https:").trim();
 const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  `img-src 'self' data: blob: ${cams}`,
+  `media-src 'self' blob: ${cams}`,
+  `frame-src 'self' ${cams}`,
   "font-src 'self'",
-  "connect-src 'self' https://viacep.com.br",
+  `connect-src 'self' https://viacep.com.br ${cams}`,
   "frame-ancestors 'none'",
   "form-action 'self'",
   "base-uri 'self'",
@@ -16,7 +21,7 @@ const csp = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
-  experimental: { serverActions: { bodySizeLimit: "2mb" } },
+  experimental: { serverActions: { bodySizeLimit: "4mb" } },
   async headers() {
     return [{
       source: "/:path*",

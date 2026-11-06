@@ -2,6 +2,7 @@ import type { WorkOrderStatus } from "@prisma/client";
 import type { Tx } from "./db";
 import type { SessionUser } from "./auth";
 import { audit } from "./audit";
+import { ensurePhaseCameras, phaseOf } from "./phases";
 
 // Máquina de estados da OS (spec §5.2). Toda transição passa por transition(), que valida no servidor.
 
@@ -134,6 +135,7 @@ export async function transition(tx: Tx, woId: string, to: WorkOrderStatus, user
   await tx.workOrderStatusHistory.create({
     data: { workOrderId: woId, fromStatus: wo.status, toStatus: to, userId: user?.id, userName: user?.name ?? "Cliente", reason: opts.reason, source: opts.source ?? "TELA" },
   });
+  await ensurePhaseCameras(tx, woId, phaseOf(to));
   await audit({ action: "STATUS", entity: "WorkOrder", entityId: woId, userId: user?.id, userName: user?.name, before: { status: wo.status }, after: { status: to, reason: opts.reason } }, tx);
   return updated;
 }
