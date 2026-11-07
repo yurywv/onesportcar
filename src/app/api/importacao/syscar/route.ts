@@ -10,11 +10,12 @@ import { stageRows, auditImport } from "@/lib/importer";
 // administrador conferir o lote e clicar em "Importar" na tela de Importação.
 
 export const maxDuration = 60;
-const ORIGINS = ["https://apolo.syscar.com.br", "https://externo.syscar.com.br"];
+// O SYSCAR alterna entre servidores (apolo, odin, afrodite…): aceita qualquer subdomínio https de syscar.com.br.
+const isSyscar = (o: string) => /^https:\/\/[a-z0-9-]+\.syscar\.com\.br$/.test(o);
 
 function cors(req: NextRequest, res: NextResponse) {
   const origin = req.headers.get("origin");
-  if (origin && ORIGINS.includes(origin)) {
+  if (origin && isSyscar(origin)) {
     res.headers.set("Access-Control-Allow-Origin", origin);
     res.headers.set("Vary", "Origin");
     res.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
