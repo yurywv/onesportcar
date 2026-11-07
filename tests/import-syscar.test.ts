@@ -30,6 +30,20 @@ describe("importação de serviços e itens de OS do SYSCAR", () => {
     expect(checkRow("SERVICOS", { code: "", name: "" }).errors).toEqual(["Código ausente", "Descrição ausente"]);
   });
 
+  it("localiza o proprietário do veículo pelo nome (relatório de veículos do SYSCAR)", async () => {
+    await db.customer.create({ data: { type: "PF", name: `MARIA ${uid}`, document: `M${uid}${Date.now()}`, whatsapp: "(19) 9 8292-2738" } });
+    await db.customer.create({ data: { type: "PF", name: `JOSE ${uid}`, document: `J1${uid}${Date.now()}`, whatsapp: "(19) 9 1111-1111" } });
+    await db.customer.create({ data: { type: "PF", name: `JOSE ${uid}`, document: `J2${uid}${Date.now()}`, whatsapp: "(19) 9 2222-2222" } });
+    const { counts, rows } = await stage("VEICULOS", [
+      { plate: "GFD1I09", make: "HYUNDAI", model: "HB20S", yearMfg: "2017", ownerName: `maria ${uid}`, ownerPhone: "(19) 9 8292-2738" },
+      { plate: "QQN2822", make: "HYUNDAI", model: "HB20", yearMfg: "2018 - 2019", ownerName: `JOSE ${uid}`, ownerPhone: "(19) 9 2222-2222" },
+      { plate: "FPP8211", make: "NISSAN", model: "SENTRA", ownerName: `JOSE ${uid}` },
+    ]);
+    expect(rows.map((r) => r.status)).toEqual(["VALIDO", "VALIDO", "INVALIDO"]);
+    expect(rows[2].messages[0]).toMatch(/Há 2 clientes/);
+    expect(counts.VALIDO).toBe(2);
+  });
+
   it("importa itens na OS do histórico, bloqueia repetição e reverte", async () => {
     const os = `9${uid}`;
     const { counts, rows } = await stage("OS_ITENS", [

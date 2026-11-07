@@ -10,11 +10,11 @@ export const ENTITY_LABEL: Record<ImportEntity, string> = {
 export const ENTITY_ORDER: ImportEntity[] = ["CLIENTES", "VEICULOS", "FORNECEDORES", "ITENS", "SERVICOS", "OS", "OS_ITENS"];
 export const ENTITY_HELP: Record<ImportEntity, string> = {
   CLIENTES: "Chave: CPF/CNPJ. Clientes sem documento válido ficam como inválidos para correção no SYSCAR.",
-  VEICULOS: "Chave: placa. O proprietário é localizado pelo CPF/CNPJ ou pelo código do cliente no SYSCAR — importe os clientes antes.",
+  VEICULOS: "Chave: placa. O proprietário atual é localizado pelo CPF/CNPJ, código ou nome (+ telefone) do cliente — importe os clientes antes. Dono sem cadastro vira cadastro provisório; placa já cadastrada com outro dono vira troca de proprietário.",
   FORNECEDORES: "Chave: CNPJ/CPF.",
   ITENS: "Chave: código da peça (SKU). Saldo informado entra como inventário inicial ao custo informado.",
   SERVICOS: "Chave: código do serviço. O valor vira o preço/valor-hora do catálogo.",
-  OS: "Histórico somente leitura (sem efeito em estoque ou financeiro). O veículo é localizado pela placa — importe os veículos antes.",
+  OS: "Histórico somente leitura (sem efeito em estoque ou financeiro). O veículo é localizado pela placa (ou chassi); cada OS fica com o cliente da época, e os períodos de cada proprietário são recalculados a partir das OS.",
   OS_ITENS: "Produtos e serviços de cada OS do histórico (monta o histórico de manutenção do veículo). A OS é localizada pelo número no SYSCAR — importe o histórico de OS antes. Sem efeito em estoque ou financeiro.",
 };
 
@@ -71,6 +71,8 @@ export const FIELDS: Record<ImportEntity, FieldDef[]> = {
     f("plate", "Placa", ["placa"], { required: true }),
     f("ownerDocument", "CPF/CNPJ do proprietário", ["cpf/cnpj", "cpf", "cnpj", "documento", "cpf cliente", "cnpj cliente"], { hint: "Informe este ou o código do cliente" }),
     f("ownerCode", "Código do cliente no SYSCAR", ["codigo cliente", "cod cliente", "cliente codigo", "codigo"]),
+    f("ownerName", "Nome do proprietário", ["cliente", "proprietario", "nome cliente"], { hint: "Usado quando não há CPF/CNPJ nem código" }),
+    f("ownerPhone", "Telefone do proprietário", ["telefone", "celular"], { hint: "Desempata nomes iguais" }),
     f("make", "Marca", ["marca", "fabricante", "montadora"]),
     f("model", "Modelo", ["modelo", "veiculo", "descricao veiculo"], { required: true }),
     f("version", "Versão", ["versao", "complemento modelo"]),
@@ -121,7 +123,10 @@ export const FIELDS: Record<ImportEntity, FieldDef[]> = {
     f("openedAt", "Data de abertura", ["data", "abertura", "data abertura", "dt abertura", "emissao", "data entrada"], { required: true }),
     f("closedAt", "Data de encerramento", ["encerramento", "data saida", "fechamento", "data fechamento", "dt saida", "entrega"]),
     f("plate", "Placa", ["placa"], { required: true }),
+    f("vin", "Chassi", ["chassi", "chassis", "vin"]),
     f("customerDocument", "CPF/CNPJ do cliente", ["cpf/cnpj", "cpf", "cnpj", "documento"]),
+    f("customerName", "Cliente (nome)", ["cliente", "nome cliente", "razao social"], { hint: "Cliente da época: pode ser um dono anterior do veículo" }),
+    f("customerPhone", "Telefone do cliente", ["telefone", "celular", "fone"]),
     f("km", "Quilometragem", ["km", "quilometragem", "hodometro"]),
     f("complaint", "Reclamação / defeito", ["reclamacao", "defeito", "problema", "queixa", "solicitacao"]),
     f("services", "Serviços executados", ["servicos", "servico", "descricao", "servicos executados", "mao de obra"]),

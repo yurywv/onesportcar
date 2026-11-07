@@ -103,3 +103,16 @@ Hospedagem: Vercel (time Govertech, região `gru1` São Paulo) · Banco: Neon Po
 - Vídeo exibido no navegador precisa ser **HTTPS** e sem senha na URL. Restrinja as origens com a variável `CAMERA_ORIGINS` (ex.: `https://cam.onesportcar.com.br`); sem ela, o CSP aceita qualquer origem HTTPS para mídia/iframe.
 
 Migration `app_cliente_cotacao_cameras` (aplicada no build). Testes: 32 passando + roteiro ponta a ponta (cliente → recepção → mecânico → comprador → comercial → aprovação no app).
+
+---
+
+# Entrega 06/11/2026 — Importação de veículos com proprietários e histórico de donos
+
+- **Veículos (SYSCAR → “Veículos com Proprietário”)**: o dono atual é localizado por CPF/CNPJ, código do cliente ou **nome** (sem diferença de acento/caixa; o telefone desempata homônimos). Dono que não está entre os clientes vira **cadastro provisório** (documento `SYSCAR-…`, sem CPF/CNPJ) — fica sinalizado para completar e não recebe convite do app até ter documento.
+- **Placa já cadastrada com outro dono** = **troca de proprietário** (o vínculo anterior é encerrado, nada é apagado). Mesmo dono = duplicado.
+- **Histórico de OS**: cada OS fica com o **cliente da época** (nome/telefone/CPF da OS), não com o dono atual. O veículo é achado pela placa ou, se a placa mudou, pelo chassi.
+- **Períodos de cada dono** são recalculados a partir das OS ao importar o histórico (e por botão na ficha do veículo). Quem aparece só entre dois atendimentos do mesmo dono (A, B, A) é tratado como quem trouxe/pagou o carro. Trocas feitas no próprio sistema nunca são sobrescritas.
+- **Telas**: ficha do veículo com a linha de proprietários (origem e nº de OS de cada um) e o cliente de cada OS antiga; ficha do cliente com “Veículos que já foram deste cliente”.
+- **App do cliente**: o dono atual vê o histórico completo do carro (atendimentos de donos anteriores aparecem sem valores e sem o nome de quem era o dono); quem já foi dono continua vendo só os próprios atendimentos em “Veículos que já foram seus”.
+
+Migration `historico_proprietarios` (aplicada no build). Testes: 35 passando.

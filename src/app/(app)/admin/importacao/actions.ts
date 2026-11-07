@@ -7,6 +7,7 @@ import { run, type ActionState } from "@/lib/action";
 import { RuleError } from "@/lib/workflow";
 import { ENTITY_ORDER, FIELDS, type ImportEntity } from "@/lib/import-fields";
 import { stageRows, importRow, revertRow, auditImport, type RawRow } from "@/lib/importer";
+import { rebuildOwnership } from "@/lib/ownership";
 
 const CHUNK = 150;
 type Res<T> = ({ ok: true } & T) | { ok: false; error: string };
@@ -79,6 +80,11 @@ export async function importNextChunk(jobId: string) {
         const msg = e instanceof Error ? e.message.split("\n").filter(Boolean).slice(-1)[0] : "erro";
         await db.importRow.update({ where: { id: r.id }, data: { status: "ERRO", messages: { push: `Falha ao gravar: ${msg.slice(0, 300)}` } } });
       }
+    }
+    // Histórico de OS: recalcula os períodos de cada proprietário dos veículos deste bloco
+    if (job.entity === "OS") {
+      const vehicleIds = [...new Set(rows.map((r) => (r.data as { vehicleId?: string }).vehicleId).filter(Boolean) as string[])];
+      for (const vid of vehicleIds) await db.$transaction((tx) => rebuildOwnership(tx, vid));
     }
     const remaining = await db.importRow.count({ where: { jobId, status: "VALIDO" } });
     if (!remaining) {
