@@ -124,5 +124,5 @@ Migration `historico_proprietarios` (aplicada no build). Testes: 35 passando.
 - Ritmo: mensagens por disparo, intervalo em minutos, janela de horário (Brasília) e só dias úteis. Pausar, retomar, cancelar, reenviar falhas, duplicar.
 - Canais: **E-mail** (Resend, domínio onesportcar.com.br), **WhatsApp API oficial** (Meta, modelo aprovado) e **WhatsApp assistido** (fila com botão wa.me, sem configuração).
 - LGPD: link de descadastro em todo e-mail + descadastro "um clique" do Gmail/Outlook (List-Unsubscribe); descadastrados nunca entram em campanhas; no WhatsApp assistido, botão "Pediu para sair".
-- Disparo: Vercel Cron a cada minuto (`/api/cron/campanhas`, exige plano Pro e `CRON_SECRET`) e, como reserva, a própria tela da campanha aberta.
+- Disparo: enquanto a tela da campanha estiver aberta (verifica a cada 30 s). O time da Vercel está no plano Hobby, que só permite cron diário; ao migrar para o Pro, basta adicionar em vercel.json `"crons": [{ "path": "/api/cron/campanhas", "schedule": "* * * * *" }]` e a variável `CRON_SECRET` para o envio seguir com a tela fechada.
 - Variáveis de ambiente: `RESEND_API_KEY`, `MAIL_FROM`, `MAIL_REPLY_TO`, `CRON_SECRET`, `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`.
