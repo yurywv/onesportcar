@@ -50,6 +50,7 @@ export const PERMISSIONS = {
   "cameras:ver": "Ver câmeras da oficina",
   "cameras:configurar": "Cadastrar câmeras e associá-las às fases e às OS",
   "app_cliente:convidar": "Gerar convite de acesso ao app do cliente",
+  "marketing:campanhas": "Criar e disparar campanhas de e-mail e WhatsApp",
   "admin:usuarios": "Gerenciar usuários",
   "admin:importar": "Importar cadastros do SYSCAR",
   "auditoria:ver": "Ver log de auditoria",
@@ -78,7 +79,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "dashboard:ver", "clientes:ver", "clientes:editar", "clientes:ver_documentos", "veiculos:ver", "veiculos:editar",
     "agenda:ver", "agenda:editar", "os:ver", "os:ver_todas", "os:criar", "os:transicionar", "os:checkout",
     "orcamento:editar", "orcamento:registrar_aprovacao", "orcamento:ver_custos", "precificacao:editar", "pagamentos:registrar", "estoque:ver", "compras:ver", "fiscal:ver",
-    "fotos:adicionar", "cameras:ver", "app_cliente:convidar",
+    "fotos:adicionar", "cameras:ver", "app_cliente:convidar", "marketing:campanhas",
   ],
   RECEPCAO: [
     "clientes:ver", "clientes:editar", "clientes:ver_documentos", "veiculos:ver", "veiculos:editar", "agenda:ver", "agenda:editar",

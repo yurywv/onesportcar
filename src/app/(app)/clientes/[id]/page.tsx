@@ -96,7 +96,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
               ["Atendimentos", String(c.workOrders.length)],
               ["Último atendimento", date(c.workOrders[0]?.openedAt)],
               ["Canal preferido", c.preferredChannel],
-              ["Consentimento marketing", c.consentMarketing ? `Sim (${date(c.consentAt)})` : "Não"],
+              ["Consentimento marketing", c.consentMarketing ? `Sim (${date(c.consentAt)})` : c.marketingOptOutAt ? `Descadastrado em ${date(c.marketingOptOutAt)}` : "Não"],
             ]} />
           </Section>
           {can(user.role, "app_cliente:convidar") && (

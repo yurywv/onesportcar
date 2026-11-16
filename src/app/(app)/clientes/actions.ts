@@ -72,7 +72,7 @@ export async function updateCustomer(_: ActionState, fd: FormData): Promise<Acti
     await db.$transaction(async (tx) => {
       await tx.customer.update({
         where: { id },
-        data: { ...data, active: bool(fd, "active"), consentAt: data.consentMarketing && !before.consentMarketing ? new Date() : data.consentMarketing ? before.consentAt : null },
+        data: { ...data, active: bool(fd, "active"), ...(data.consentMarketing && !before.consentMarketing ? { marketingOptOutAt: null } : {}), consentAt: data.consentMarketing && !before.consentMarketing ? new Date() : data.consentMarketing ? before.consentAt : null },
       });
       await audit({ action: "UPDATE", entity: "Customer", entityId: id, userId: user.id, userName: user.name, before: d.before, after: { ...d.after, active: bool(fd, "active") }, ...(await requestMeta()) }, tx);
     });
