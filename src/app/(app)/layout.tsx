@@ -8,6 +8,7 @@ const NAV: (NavItem & { perm: Permission })[] = [
   { href: "/recepcao", label: "Recepção", icon: "DoorOpen", perm: "os:criar" },
   { href: "/agenda", label: "Agenda", icon: "CalendarDays", perm: "agenda:ver" },
   { href: "/comercial", label: "Comercial", icon: "BadgeDollarSign", perm: "precificacao:editar" },
+  { href: "/marketing/campanhas", label: "Campanhas", icon: "Megaphone", perm: "marketing:campanhas" },
   { href: "/cadastros", label: "Cadastros", icon: "FolderCog", perm: "os:ver" },
   { href: "/clientes", label: "Clientes", icon: "Users", perm: "clientes:ver" },
   { href: "/veiculos", label: "Veículos", icon: "Car", perm: "veiculos:ver" },

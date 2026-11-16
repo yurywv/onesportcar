@@ -116,3 +116,13 @@ Migration `app_cliente_cotacao_cameras` (aplicada no build). Testes: 32 passando
 - **App do cliente**: o dono atual vê o histórico completo do carro (atendimentos de donos anteriores aparecem sem valores e sem o nome de quem era o dono); quem já foi dono continua vendo só os próprios atendimentos em “Veículos que já foram seus”.
 
 Migration `historico_proprietarios` (aplicada no build). Testes: 35 passando.
+
+## Entrega 16/11/2026 — Campanhas (mala direta por e-mail e WhatsApp)
+
+- Menu **Campanhas** (perfis Administrador, Gestor e Consultor): criar campanha, escolher o público por filtros (autorizou marketing / todos os clientes, PF/PJ, cidade, marca e modelo do veículo, veio nos últimos N meses, sumido há N meses) ou marcando clientes um a um.
+- Variáveis na mensagem: `{nome}`, `{primeiro_nome}`, `{carro}`, `{placa}`. Prévia ao vivo e envio de teste.
+- Ritmo: mensagens por disparo, intervalo em minutos, janela de horário (Brasília) e só dias úteis. Pausar, retomar, cancelar, reenviar falhas, duplicar.
+- Canais: **E-mail** (Resend, domínio onesportcar.com.br), **WhatsApp API oficial** (Meta, modelo aprovado) e **WhatsApp assistido** (fila com botão wa.me, sem configuração).
+- LGPD: link de descadastro em todo e-mail + descadastro "um clique" do Gmail/Outlook (List-Unsubscribe); descadastrados nunca entram em campanhas; no WhatsApp assistido, botão "Pediu para sair".
+- Disparo: enquanto a tela da campanha estiver aberta (verifica a cada 30 s). O time da Vercel está no plano Hobby, que só permite cron diário; ao migrar para o Pro, basta adicionar em vercel.json `"crons": [{ "path": "/api/cron/campanhas", "schedule": "* * * * *" }]` e a variável `CRON_SECRET` para o envio seguir com a tela fechada.
+- Variáveis de ambiente: `RESEND_API_KEY`, `MAIL_FROM`, `MAIL_REPLY_TO`, `CRON_SECRET`, `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`.

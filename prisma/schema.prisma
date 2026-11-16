@@ -137,6 +137,8 @@ model Customer {
   preferredChannel   String? // WHATSAPP, EMAIL, TELEFONE
   consentMarketing   Boolean    @default(false)
   consentAt          DateTime?
+  marketingOptOutAt  DateTime? // descadastro de campanhas (e-mail/WhatsApp) — nunca mais incluído
+  marketingToken     String?    @unique // token do link de descadastro
   active             Boolean    @default(true)
   legacyCode         String? // código no SYSCAR
   // App do cliente: login por CPF/CNPJ + senha definida pelo próprio cliente (convite gerado pela recepção)
@@ -156,6 +158,7 @@ model Customer {
   appointments   Appointment[]
   titles         Title[]
   fiscalDocs     FiscalDocument[]
+  campaignRecipients CampaignRecipient[]
 
   @@index([name])
   @@index([phone])
@@ -1365,4 +1368,77 @@ model CustomerPortalToken {
   usedAt      DateTime?
   createdById String
   createdAt   DateTime  @default(now())
+}
+
+// ─── Campanhas (mala direta por e-mail e WhatsApp) ───
+enum CampaignChannel {
+  EMAIL
+  WHATSAPP_API // WhatsApp Cloud API (Meta) com modelo aprovado
+  WHATSAPP_MANUAL // envio assistido: o consultor abre o wa.me de cada cliente
+}
+
+enum CampaignStatus {
+  RASCUNHO
+  ENVIANDO
+  PAUSADA
+  CONCLUIDA
+  CANCELADA
+}
+
+enum RecipientStatus {
+  PENDENTE
+  ENVIADO
+  FALHOU
+  PULADO
+}
+
+model Campaign {
+  id              String          @id @default(uuid())
+  name            String
+  channel         CampaignChannel
+  status          CampaignStatus  @default(RASCUNHO)
+  subject         String? // e-mail
+  body            String          @default("") // texto com {nome}, {primeiro_nome}, {carro}, {placa}
+  imageUrl        String? // banner opcional (e-mail)
+  waTemplate      String? // nome do modelo aprovado na Meta
+  waLanguage      String          @default("pt_BR")
+  waParams        String? // variáveis do corpo do modelo, separadas por vírgula: nome,carro
+  batchSize       Int             @default(50) // mensagens por disparo
+  intervalMinutes Int             @default(10) // intervalo entre disparos
+  windowStart     Int             @default(480) // minutos do dia (08:00) — horário de Brasília
+  windowEnd       Int             @default(1200) // 20:00
+  weekdaysOnly    Boolean         @default(true)
+  appUrl          String? // endereço público usado nos links (descadastro)
+  startedAt       DateTime?
+  nextRunAt       DateTime?
+  lastRunAt       DateTime?
+  finishedAt      DateTime?
+  createdById     String?
+  createdByName   String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  recipients CampaignRecipient[]
+
+  @@index([status, nextRunAt])
+}
+
+model CampaignRecipient {
+  id         String          @id @default(uuid())
+  campaignId String
+  campaign   Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   Customer        @relation(fields: [customerId], references: [id])
+  name       String
+  address    String // e-mail ou telefone (E.164 sem +)
+  vars       Json            @default("{}")
+  status     RecipientStatus @default(PENDENTE)
+  error      String?
+  providerId String?
+  attempts   Int             @default(0)
+  sentAt     DateTime?
+  createdAt  DateTime        @default(now())
+
+  @@unique([campaignId, customerId])
+  @@index([campaignId, status])
 }
