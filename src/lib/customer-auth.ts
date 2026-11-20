@@ -73,10 +73,10 @@ export async function requireCustomer(): Promise<PortalCustomer> {
 }
 
 /** Gera o link de convite (ou de nova senha). O token só existe no link; aqui fica o hash. */
-export async function createPortalInvite(tx: Tx, customerId: string, userId: string) {
+export async function createPortalInvite(tx: Tx, customerId: string, userId: string, minutes = INVITE_DAYS * 24 * 60) {
   await tx.customerPortalToken.updateMany({ where: { customerId, usedAt: null }, data: { usedAt: new Date() } });
   const token = randomBytes(24).toString("base64url");
-  await tx.customerPortalToken.create({ data: { customerId, tokenHash: sha256(token), expiresAt: new Date(Date.now() + INVITE_DAYS * 86400_000), createdById: userId } });
+  await tx.customerPortalToken.create({ data: { customerId, tokenHash: sha256(token), expiresAt: new Date(Date.now() + minutes * 60_000), createdById: userId } });
   return token;
 }
 
