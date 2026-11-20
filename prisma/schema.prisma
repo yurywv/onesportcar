@@ -159,6 +159,7 @@ model Customer {
   titles         Title[]
   fiscalDocs     FiscalDocument[]
   campaignRecipients CampaignRecipient[]
+  messageLogs        MessageLog[]
 
   @@index([name])
   @@index([phone])
@@ -1400,6 +1401,12 @@ model Campaign {
   subject         String? // e-mail
   body            String          @default("") // texto com {nome}, {primeiro_nome}, {carro}, {placa}
   imageUrl        String? // banner opcional (e-mail)
+  emailMode       String          @default("TEXTO") // TEXTO (editor) | ARTE (imagem pronta) | HTML (HTML pronto)
+  preheader       String? // resumo exibido ao lado do assunto na caixa de entrada
+  artId           String? // arte pronta (CampaignAsset)
+  artAlt          String? // texto alternativo da arte
+  artLink         String? // destino ao clicar na arte
+  htmlBody        String? // HTML pronto (Canva, Mailchimp etc.)
   waTemplate      String? // nome do modelo aprovado na Meta
   waLanguage      String          @default("pt_BR")
   waParams        String? // variáveis do corpo do modelo, separadas por vírgula: nome,carro
@@ -1419,8 +1426,55 @@ model Campaign {
   updatedAt       DateTime        @updatedAt
 
   recipients CampaignRecipient[]
+  assets     CampaignAsset[]
 
   @@index([status, nextRunAt])
+}
+
+/// Imagens usadas nos e-mails (arte pronta e imagens no meio do texto). Servidas em /arte/[id].
+model CampaignAsset {
+  id         String    @id @default(uuid())
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  fileName   String
+  mime       String
+  size       Int
+  width      Int?
+  height     Int?
+  data       Bytes
+  createdBy  String?
+  createdAt  DateTime  @default(now())
+
+  @@index([campaignId])
+}
+
+/// Configurações editáveis pela tela (não secretas). Ex.: número do WhatsApp comercial.
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+}
+
+/// Registro de mensagens avulsas (fora de campanha) enviadas pela tela de WhatsApp.
+model MessageLog {
+  id         String    @id @default(uuid())
+  channel    String // WHATSAPP_API | WHATSAPP_MANUAL | EMAIL
+  to         String
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  body       String
+  template   String?
+  fromNumber String?
+  status     String // ENVIADO | FALHOU | ABERTO (assistido)
+  providerId String?
+  error      String?
+  userId     String?
+  userName   String?
+  createdAt  DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([customerId])
 }
 
 model CampaignRecipient {

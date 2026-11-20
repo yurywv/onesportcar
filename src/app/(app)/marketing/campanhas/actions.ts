@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { CampaignChannel } from "@prisma/client";
 import { db } from "@/lib/db";
-import { assertUser } from "@/lib/auth";
+import { assertUser, AuthError } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { run, str, req, int, bool, type ActionState } from "@/lib/action";
 import { RuleError } from "@/lib/workflow";
@@ -53,12 +53,28 @@ export async function saveCampaign(_: ActionState, fd: FormData): Promise<Action
     if (imageUrl && !/^https:\/\//.test(imageUrl)) throw new RuleError("A imagem precisa ser um endereço https://.");
     const waTemplate = str(fd, "waTemplate");
     if (waTemplate && !/^[a-z0-9_]+$/.test(waTemplate)) throw new RuleError("Nome do modelo da Meta: só letras minúsculas, números e _ (ex.: revisao_lembrete).");
+    const isEmail = channel === "EMAIL";
+    const emailMode = isEmail ? (["TEXTO", "ARTE", "HTML"].includes(str(fd, "emailMode") ?? "") ? str(fd, "emailMode")! : "TEXTO") : "TEXTO";
+    const artId = isEmail && emailMode === "ARTE" ? str(fd, "artId") : null;
+    if (artId && !(await db.campaignAsset.findUnique({ where: { id: artId }, select: { id: true } }))) throw new RuleError("Arte não encontrada. Envie a imagem de novo.");
+    const artLink = isEmail && emailMode === "ARTE" ? str(fd, "artLink") : null;
+    if (artLink && !/^(https?:\/\/|www\.|mailto:|tel:)/i.test(artLink)) throw new RuleError("Link da arte: use um endereço completo (https://…), mailto: ou tel:.");
+    const htmlBody = isEmail && emailMode === "HTML" ? str(fd, "htmlBody") : null;
+    if (htmlBody && htmlBody.length > 400_000) throw new RuleError("HTML muito grande (máx. 400 KB). Hospede as imagens e use os links.");
+    const bodyRaw = (str(fd, "body") ?? "").replace(/\r\n?/g, "\n");
+    if (isEmail && emailMode === "TEXTO" && !bodyRaw) throw new RuleError("Preencha: Conteúdo do e-mail.");
+    if (isEmail && emailMode === "ARTE" && !artId) throw new RuleError("Envie a arte (imagem) do e-mail.");
+    if (isEmail && emailMode === "HTML" && !htmlBody) throw new RuleError("Cole ou importe o HTML do e-mail.");
+    if (channel === "WHATSAPP_MANUAL" && !bodyRaw) throw new RuleError("Preencha: Mensagem.");
     const data = {
       name: req(fd, "name", "Nome da campanha"),
       channel,
-      subject: channel === "EMAIL" ? req(fd, "subject", "Assunto do e-mail") : null,
-      body: (channel === "WHATSAPP_API" ? str(fd, "body") ?? "" : req(fd, "body", "Mensagem")).replace(/\r\n?/g, "\n"),
-      imageUrl: channel === "EMAIL" ? imageUrl : null,
+      subject: isEmail ? req(fd, "subject", "Assunto do e-mail") : null,
+      body: bodyRaw,
+      imageUrl: isEmail && emailMode === "TEXTO" ? imageUrl : null,
+      emailMode, artId, artLink, htmlBody,
+      artAlt: isEmail && emailMode === "ARTE" ? str(fd, "artAlt") : null,
+      preheader: isEmail ? str(fd, "preheader") : null,
       waTemplate: channel === "WHATSAPP_API" ? waTemplate : null,
       waLanguage: str(fd, "waLanguage") ?? "pt_BR",
       waParams: channel === "WHATSAPP_API" ? str(fd, "waParams") : null,
@@ -69,6 +85,7 @@ export async function saveCampaign(_: ActionState, fd: FormData): Promise<Action
       ? await db.campaign.update({ where: { id }, data })
       : await db.campaign.create({ data: { ...data, createdById: user.id, createdByName: user.name } });
     await audit({ action: id ? "UPDATE" : "CREATE", entity: "Campaign", entityId: c.id, userId: user.id, userName: user.name, after: { name: c.name, channel } });
+    if (artId) await db.campaignAsset.updateMany({ where: { id: artId, campaignId: null }, data: { campaignId: c.id } });
     if (!id) newId = c.id;
     revalidatePath("/marketing/campanhas");
     revalidatePath(path(c.id));
@@ -85,7 +102,8 @@ export async function duplicateCampaign(_: ActionState, fd: FormData): Promise<A
     const c = await load(req(fd, "id", "Campanha"));
     const copy = await db.campaign.create({
       data: {
-        name: `${c.name} (cópia)`, channel: c.channel, subject: c.subject, body: c.body, imageUrl: c.imageUrl, waTemplate: c.waTemplate, waLanguage: c.waLanguage,
+        name: `${c.name} (cópia)`, channel: c.channel, subject: c.subject, body: c.body, imageUrl: c.imageUrl,
+        emailMode: c.emailMode, preheader: c.preheader, artId: c.artId, artAlt: c.artAlt, artLink: c.artLink, htmlBody: c.htmlBody, waTemplate: c.waTemplate, waLanguage: c.waLanguage,
         waParams: c.waParams, batchSize: c.batchSize, intervalMinutes: c.intervalMinutes, windowStart: c.windowStart, windowEnd: c.windowEnd,
         weekdaysOnly: c.weekdaysOnly, createdById: user.id, createdByName: user.name,
       },
@@ -166,7 +184,13 @@ export async function startCampaign(_: ActionState, fd: FormData): Promise<Actio
     const c = await load(req(fd, "id", "Campanha"));
     if (!["RASCUNHO", "PAUSADA"].includes(c.status)) throw new RuleError("Esta campanha não pode ser iniciada agora.");
     if (c.channel === "EMAIL" && !emailConfigured()) throw new RuleError("E-mail ainda não configurado na Vercel (RESEND_API_KEY e MAIL_FROM).");
-    if (c.channel === "WHATSAPP_API" && !whatsappConfigured()) throw new RuleError("WhatsApp API ainda não configurado (WHATSAPP_TOKEN e WHATSAPP_PHONE_NUMBER_ID).");
+    if (c.channel === "EMAIL") {
+      const { emailReadiness } = await import("@/lib/send-readiness");
+      const r = await emailReadiness();
+      const bad = r.checks.filter((x) => x.ok === false);
+      if (bad.length) throw new RuleError(`O e-mail ainda não está pronto: ${bad.map((b) => `${b.label} (${b.detail})`).join("; ")}. Veja Configurações de envio.`);
+    }
+    if (c.channel === "WHATSAPP_API" && !(await whatsappConfigured())) throw new RuleError("WhatsApp API ainda não configurado (WHATSAPP_TOKEN na Vercel e ID do número em Configurações de envio).");
     const pending = await db.campaignRecipient.count({ where: { campaignId: c.id, status: "PENDENTE" } });
     if (!pending) throw new RuleError("Nenhum destinatário pendente. Inclua clientes na aba Público.");
     await db.campaign.update({ where: { id: c.id }, data: { status: "ENVIANDO", appUrl: await appUrl(), startedAt: c.startedAt ?? new Date(), nextRunAt: null } });
@@ -235,4 +259,35 @@ export async function markManual(_: ActionState, fd: FormData): Promise<ActionSt
     revalidatePath(path(id));
     return how === "optout" ? "Cliente descadastrado." : how === "skip" ? "Pulado." : "Marcado como enviado.";
   });
+}
+
+// ─── Imagens do e-mail (arte pronta e imagens no meio do texto) ───
+const MAGIC: [string, (b: Buffer) => boolean][] = [
+  ["image/jpeg", (b) => b[0] === 0xff && b[1] === 0xd8],
+  ["image/png", (b) => b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))],
+  ["image/gif", (b) => b.subarray(0, 4).toString() === "GIF8"],
+  ["image/webp", (b) => b.subarray(0, 4).toString() === "RIFF" && b.subarray(8, 12).toString() === "WEBP"],
+];
+
+export async function uploadCampaignAsset(fd: FormData): Promise<{ ok: true; id: string; url: string } | { ok: false; error: string }> {
+  try {
+    const user = await assertUser("marketing:campanhas");
+    const f = fd.get("file");
+    if (!(f instanceof File) || !f.size) return { ok: false, error: "Escolha uma imagem." };
+    if (f.size > 3.5 * 1024 * 1024) return { ok: false, error: "Imagem acima de 3,5 MB. Exporte em JPG com qualidade menor (ou largura de 1200 px)." };
+    const buf = Buffer.from(await f.arrayBuffer());
+    const mime = MAGIC.find(([, t]) => t(buf))?.[0];
+    if (!mime) return { ok: false, error: "Formato não aceito. Use JPG, PNG, GIF ou WebP." };
+    const w = Number(fd.get("width")) || null, h = Number(fd.get("height")) || null;
+    const campaignId = (fd.get("campaignId") as string) || null;
+    const a = await db.campaignAsset.create({
+      data: { fileName: f.name.slice(0, 200), mime, size: buf.length, width: w, height: h, data: buf, createdBy: user.name, campaignId: campaignId && (await db.campaign.findUnique({ where: { id: campaignId }, select: { id: true } })) ? campaignId : null },
+      select: { id: true },
+    });
+    return { ok: true, id: a.id, url: `/arte/${a.id}` };
+  } catch (e) {
+    if (e instanceof RuleError || e instanceof AuthError) return { ok: false, error: e.message };
+    console.error(e);
+    return { ok: false, error: "Não foi possível enviar a imagem." };
+  }
 }

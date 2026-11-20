@@ -11,6 +11,7 @@ import { CampaignForm } from "../campaign-form";
 import { CHANNEL_LABEL, STATUS_LABEL, STATUS_TONE, RSTATUS_LABEL } from "../labels";
 import { addRecipients, removeRecipient, sendTest, startCampaign, setCampaignStatus, retryFailed, markManual, duplicateCampaign } from "../actions";
 import { Ticker } from "./ticker";
+import { getSetting, formatBrPhone } from "@/lib/settings";
 
 export const metadata = { title: "Campanha" };
 export const dynamic = "force-dynamic";
@@ -27,9 +28,10 @@ export default async function CampaignPage({ params, searchParams }: { params: P
   const c = await db.campaign.findUnique({ where: { id } });
   if (!c) notFound();
   const counts = await campaignCounts(id);
+  const waNumber = formatBrPhone(await getSetting("whatsapp.numero"));
   const aba = sp.aba ?? (counts.total ? "envio" : "publico");
   const closed = c.status === "CONCLUIDA" || c.status === "CANCELADA";
-  const configured = c.channel === "EMAIL" ? emailConfigured() : c.channel === "WHATSAPP_API" ? whatsappConfigured() : true;
+  const configured = c.channel === "EMAIL" ? emailConfigured() : c.channel === "WHATSAPP_API" ? await whatsappConfigured() : true;
   const pct = counts.total ? Math.round(((counts.enviado + counts.falhou + counts.pulado) / counts.total) * 100) : 0;
 
   return (
@@ -53,7 +55,7 @@ export default async function CampaignPage({ params, searchParams }: { params: P
         ))}
       </nav>
 
-      {aba === "mensagem" && <CampaignForm c={c} locked={c.status === "ENVIANDO" || closed} />}
+      {aba === "mensagem" && <CampaignForm c={c} locked={c.status === "ENVIANDO" || closed} waNumber={waNumber} />}
       {aba === "publico" && <Audience c={c} sp={sp} closed={closed} />}
       {aba === "destinatarios" && <Recipients id={c.id} sp={sp} canEdit={!closed} />}
       {aba === "envio" && (
@@ -79,7 +81,7 @@ export default async function CampaignPage({ params, searchParams }: { params: P
               </div>
               {c.status === "ENVIANDO" && c.channel !== "WHATSAPP_MANUAL" && <div className="mt-3"><Ticker id={c.id} cron={!!process.env.CRON_SECRET} /></div>}
             </Section>
-            {c.channel === "WHATSAPP_MANUAL" && c.status === "ENVIANDO" && <ManualQueue c={c} />}
+            {c.channel === "WHATSAPP_MANUAL" && c.status === "ENVIANDO" && <ManualQueue c={c} waNumber={waNumber} />}
           </div>
           {c.channel !== "WHATSAPP_MANUAL" && (
             <Section title="Envio de teste">
@@ -215,11 +217,12 @@ async function Recipients({ id, sp, canEdit }: { id: string; sp: SP; canEdit: bo
   );
 }
 
-async function ManualQueue({ c }: { c: { id: string; body: string } }) {
+async function ManualQueue({ c, waNumber }: { c: { id: string; body: string }; waNumber: string }) {
   const next = await db.campaignRecipient.findMany({ where: { campaignId: c.id, status: "PENDENTE" }, orderBy: { createdAt: "asc" }, take: 5 });
   if (!next.length) return null;
   return (
     <Section title="Fila do envio assistido">
+      <p className="mb-2 rounded-md bg-[var(--surface-2)] p-2 text-sm">📱 Envie pelo WhatsApp comercial <b>{waNumber}</b> — confira se é esse o número aberto no celular ou no WhatsApp Web antes de começar.</p>
       <p className="mb-3 text-sm text-muted">Clique em “Abrir WhatsApp”, envie a mensagem e depois marque como enviada. Vá no seu ritmo — mandar muitas seguidas pode bloquear o número.</p>
       <ul className="divide-y divide-line">
         {next.map((r, i) => {
