@@ -82,3 +82,26 @@ describe("motor de disparo", () => {
     expect(rs.map((r) => r.status).sort()).toEqual(["FALHOU", "PENDENTE"]);
   });
 });
+
+describe("editor de e-mail", () => {
+  it("formata título, lista, botão, imagem e links com segurança", async () => {
+    const { textToHtml, buildEmail, sanitizeEmailHtml } = await import("@/lib/campaigns");
+    const h = textToHtml("# Oi {x}\n\n- a\n- b\n\n[[Agendar|https://wa.me/5519]]\n\n![arte](/arte/abc)\n\nVeja [site](https://one.com) e **já** _hoje_ www.one.com.br\n\n[mal](javascript:alert(1))", "https://app.test");
+    expect(h).toContain("<h1");
+    expect(h).toContain("<ul");
+    expect(h).toContain('href="https://wa.me/5519"');
+    expect(h).toContain('src="https://app.test/arte/abc"');
+    expect(h).toContain("<strong>já</strong>");
+    expect(h).toContain("<em>hoje</em>");
+    expect(h).toContain('href="https://www.one.com.br"');
+    expect(h).not.toContain("javascript:");
+    const art = buildEmail({ mode: "ARTE", body: "Olá {primeiro_nome}", artUrl: "/arte/x", artAlt: "Promo", artLink: "https://one.com" }, { primeiro_nome: "Ana" }, { unsubscribeUrl: "https://app.test/descadastro/t", base: "https://app.test" });
+    expect(art.html).toContain('<a href="https://one.com"><img src="https://app.test/arte/x" alt="Promo"');
+    expect(art.text).toContain("Olá Ana");
+    const html = buildEmail({ mode: "HTML", body: "", htmlBody: '<html><body><p onclick="x()">Oi {primeiro_nome}</p><script>alert(1)</script></body></html>' }, { primeiro_nome: "Ana" }, { unsubscribeUrl: "https://u/t" });
+    expect(html.html).not.toMatch(/script|onclick/);
+    expect(html.html).toContain("Oi Ana");
+    expect(html.html).toContain("https://u/t");
+    expect(sanitizeEmailHtml('<a href="javascript:x">a</a>')).toContain('href="#"');
+  });
+});

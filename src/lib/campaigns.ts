@@ -1,7 +1,8 @@
 import { randomBytes } from "crypto";
 import type { Campaign, CampaignChannel, Prisma } from "@prisma/client";
 import { db } from "./db";
-import { emailHtml, inWindow, MAX_BATCH, nextWindowStart, normalizeWhatsapp, renderTemplate, validEmail, type Vars } from "./campaign-template";
+import { buildEmail, inWindow, MAX_BATCH, nextWindowStart, normalizeWhatsapp, renderTemplate, validEmail, type EmailContent, type Vars } from "./campaign-template";
+import { getSetting } from "./settings";
 
 export * from "./campaign-template";
 
@@ -25,11 +26,24 @@ export type SendResult = { ok: true; id?: string } | { ok: false; error: string;
 export type Sender = (i: SendInput) => Promise<SendResult>;
 
 export const emailConfigured = () => !!process.env.RESEND_API_KEY && !!process.env.MAIL_FROM;
-export const whatsappConfigured = () => !!process.env.WHATSAPP_TOKEN && !!process.env.WHATSAPP_PHONE_NUMBER_ID;
+/** Token fica só na Vercel; o ID do número pode ser trocado pela tela (Configurações de envio). */
+export async function whatsappPhoneId() {
+  const fromSettings = (await getSetting("whatsapp.phoneNumberId")).trim();
+  return fromSettings || process.env.WHATSAPP_PHONE_NUMBER_ID || "";
+}
+export const whatsappConfigured = async () => !!process.env.WHATSAPP_TOKEN && !!(await whatsappPhoneId());
+
+export function emailContentOf(c: Campaign): EmailContent {
+  return {
+    mode: (["TEXTO", "ARTE", "HTML"].includes(c.emailMode) ? c.emailMode : "TEXTO") as EmailContent["mode"],
+    body: c.body, preheader: c.preheader, imageUrl: c.imageUrl,
+    artUrl: c.artId ? `/arte/${c.artId}` : null, artAlt: c.artAlt, artLink: c.artLink, htmlBody: c.htmlBody,
+  };
+}
 
 export const sendEmail: Sender = async ({ campaign, to, vars, unsubscribeUrl, idempotencyKey }) => {
   if (!emailConfigured()) return { ok: false, error: "E-mail não configurado (RESEND_API_KEY / MAIL_FROM)." };
-  const body = renderTemplate(campaign.body, vars);
+  const { html, text } = buildEmail(emailContentOf(campaign), vars, { unsubscribeUrl, base: campaign.appUrl ?? new URL(unsubscribeUrl).origin });
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
@@ -38,32 +52,60 @@ export const sendEmail: Sender = async ({ campaign, to, vars, unsubscribeUrl, id
       to: [to],
       reply_to: process.env.MAIL_REPLY_TO || undefined,
       subject: renderTemplate(campaign.subject ?? campaign.name, vars),
-      html: emailHtml({ body, imageUrl: campaign.imageUrl, unsubscribeUrl }),
-      text: `${body}\n\n—\nPara não receber mais: ${unsubscribeUrl}`,
+      html,
+      text,
       headers: { "List-Unsubscribe": `<${unsubscribeUrl.replace("/descadastro/", "/api/descadastro/")}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
       tags: [{ name: "campanha", value: campaign.id.replace(/[^a-zA-Z0-9_-]/g, "") }],
     }),
   });
   const j = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
   if (res.ok) return { ok: true, id: j.id };
-  return { ok: false, error: `Resend ${res.status}: ${j.message ?? "erro"}`, retry: res.status === 429 || res.status >= 500 };
+  return { ok: false, error: `Resend ${res.status}: ${translateResend(j.message)}`, retry: res.status === 429 || res.status >= 500 };
 };
 
-export const sendWhatsapp: Sender = async ({ campaign, to, vars }) => {
-  if (!whatsappConfigured()) return { ok: false, error: "WhatsApp não configurado (WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID)." };
-  if (!campaign.waTemplate) return { ok: false, error: "Campanha sem modelo aprovado da Meta." };
-  const params = (campaign.waParams ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  const components = params.length
-    ? [{ type: "body", parameters: params.map((p) => ({ type: "text", text: (vars as Record<string, string>)[p] || "-" })) }]
-    : [];
-  const res = await fetch(`https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`, {
+function translateResend(m?: string) {
+  if (!m) return "erro";
+  if (/domain is not verified|verify a domain/i.test(m)) return `${m} — o domínio do remetente ainda não foi verificado no Resend (faltam os registros DNS).`;
+  if (/API key is invalid/i.test(m)) return `${m} — confira a RESEND_API_KEY na Vercel.`;
+  if (/testing emails/i.test(m)) return `${m} — conta do Resend em modo de teste: verifique o domínio para enviar a clientes.`;
+  return m;
+}
+
+/** Envia um modelo aprovado da Meta para um número (usado por campanhas e pelo envio avulso). */
+export async function sendWhatsappTemplate(to: string, template: string, language: string, params: string[]): Promise<SendResult> {
+  const phoneId = await whatsappPhoneId();
+  if (!process.env.WHATSAPP_TOKEN || !phoneId) return { ok: false, error: "WhatsApp API não configurado (WHATSAPP_TOKEN na Vercel e ID do número em Configurações de envio)." };
+  const components = params.length ? [{ type: "body", parameters: params.map((text) => ({ type: "text", text: text || "-" })) }] : [];
+  const res = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ messaging_product: "whatsapp", to, type: "template", template: { name: campaign.waTemplate, language: { code: campaign.waLanguage }, components } }),
+    body: JSON.stringify({ messaging_product: "whatsapp", to, type: "template", template: { name: template, language: { code: language }, components } }),
   });
   const j = (await res.json().catch(() => ({}))) as { messages?: { id: string }[]; error?: { message?: string; code?: number } };
   if (res.ok) return { ok: true, id: j.messages?.[0]?.id };
   return { ok: false, error: `WhatsApp ${res.status}: ${j.error?.message ?? "erro"}`, retry: res.status === 429 || res.status >= 500 };
+}
+
+/** Confere na Meta qual número está ligado ao ID configurado (para garantir que é o WhatsApp comercial). */
+export async function whatsappNumberInfo(): Promise<{ ok: boolean; display?: string; name?: string; quality?: string; error?: string }> {
+  const phoneId = await whatsappPhoneId();
+  if (!process.env.WHATSAPP_TOKEN || !phoneId) return { ok: false, error: "não configurado" };
+  try {
+    const res = await fetch(`https://graph.facebook.com/v21.0/${phoneId}?fields=display_phone_number,verified_name,quality_rating`, {
+      headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` }, cache: "no-store",
+    });
+    const j = (await res.json()) as { display_phone_number?: string; verified_name?: string; quality_rating?: string; error?: { message?: string } };
+    if (!res.ok) return { ok: false, error: j.error?.message ?? `HTTP ${res.status}` };
+    return { ok: true, display: j.display_phone_number, name: j.verified_name, quality: j.quality_rating };
+  } catch (e) {
+    return { ok: false, error: String((e as Error).message) };
+  }
+}
+
+export const sendWhatsapp: Sender = async ({ campaign, to, vars }) => {
+  if (!campaign.waTemplate) return { ok: false, error: "Campanha sem modelo aprovado da Meta." };
+  const params = (campaign.waParams ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return sendWhatsappTemplate(to, campaign.waTemplate, campaign.waLanguage, params.map((p) => (vars as Record<string, string>)[p] || "-"));
 };
 
 export const senderFor = (ch: CampaignChannel): Sender | null => (ch === "EMAIL" ? sendEmail : ch === "WHATSAPP_API" ? sendWhatsapp : null);

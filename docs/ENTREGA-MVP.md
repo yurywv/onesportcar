@@ -126,3 +126,10 @@ Migration `historico_proprietarios` (aplicada no build). Testes: 35 passando.
 - LGPD: link de descadastro em todo e-mail + descadastro "um clique" do Gmail/Outlook (List-Unsubscribe); descadastrados nunca entram em campanhas; no WhatsApp assistido, botão "Pediu para sair".
 - Disparo: enquanto a tela da campanha estiver aberta (verifica a cada 30 s). O time da Vercel está no plano Hobby, que só permite cron diário; ao migrar para o Pro, basta adicionar em vercel.json `"crons": [{ "path": "/api/cron/campanhas", "schedule": "* * * * *" }]` e a variável `CRON_SECRET` para o envio seguir com a tela fechada.
 - Variáveis de ambiente: `RESEND_API_KEY`, `MAIL_FROM`, `MAIL_REPLY_TO`, `CRON_SECRET`, `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`.
+
+## Entrega 20/11/2026 — Editor de e-mail marketing e tela de WhatsApp
+
+- **Editor de e-mail** com três formas de montar o conteúdo: *Escrever* (barra com título, negrito, itálico, link, botão, lista, linha, imagem e variáveis), *Arte pronta* (enviar a imagem pronta, link ao clicar e texto alternativo) e *HTML pronto* (colar ou importar .html do Canva/Mailchimp — scripts são removidos e o descadastro é incluído). Prévia real em computador e celular; pré-cabeçalho.
+- Imagens enviadas ficam guardadas na plataforma e são servidas em `/arte/<id>` (reduzidas para 1200 px).
+- **Configurações de envio** (`/marketing/configuracao`): número do WhatsApp comercial editável (padrão +55 19 99628-7848, só gestor/administrador altera), ID do número na Meta para a API oficial e diagnóstico real do e-mail (chave, remetente, domínio no Resend, DKIM/SPF no DNS). Campanha de e-mail não inicia enquanto o diagnóstico tiver pendência.
+- **Tela WhatsApp** (`/marketing/whatsapp`): mensagem para um cliente (busca por nome, celular ou placa; envio assistido pelo wa.me ou modelo aprovado pela API), campanhas de WhatsApp, histórico das mensagens avulsas e situação do canal.

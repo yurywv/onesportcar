@@ -51,6 +51,7 @@ export const PERMISSIONS = {
   "cameras:configurar": "Cadastrar câmeras e associá-las às fases e às OS",
   "app_cliente:convidar": "Gerar convite de acesso ao app do cliente",
   "marketing:campanhas": "Criar e disparar campanhas de e-mail e WhatsApp",
+  "marketing:configurar": "Alterar o número do WhatsApp comercial e as configurações de envio",
   "admin:usuarios": "Gerenciar usuários",
   "admin:importar": "Importar cadastros do SYSCAR",
   "auditoria:ver": "Ver log de auditoria",

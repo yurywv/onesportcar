@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { dateTime } from "@/lib/format";
-import { emailConfigured, whatsappConfigured } from "@/lib/campaigns";
+import { emailReadiness, whatsappReadiness } from "@/lib/send-readiness";
+import { Checks } from "@/components/checks";
 import { PageHeader, Section, Empty } from "@/components/ui";
 import { CHANNEL_LABEL, STATUS_LABEL, STATUS_TONE } from "./labels";
 
@@ -18,15 +19,11 @@ export default async function Campaigns() {
     db.customer.count({ where: { marketingOptOutAt: { not: null } } }),
   ]);
   const count = (id: string, st?: string) => groups.filter((g) => g.campaignId === id && (!st || g.status === st)).reduce((a, g) => a + g._count, 0);
-  const cfg = [
-    ["E-mail (Resend)", emailConfigured()],
-    ["WhatsApp API (Meta)", whatsappConfigured()],
-    ["Disparo automático (cron)", !!process.env.CRON_SECRET],
-  ] as const;
+  const [email, wa] = await Promise.all([emailReadiness(), whatsappReadiness()]);
 
   return (
     <>
-      <PageHeader title="Campanhas" subtitle="Mala direta por e-mail e WhatsApp, em lotes com intervalo e horário controlados." actions={<Link href="/marketing/campanhas/nova" className="btn btn-primary">Nova campanha</Link>} />
+      <PageHeader title="Campanhas" subtitle="Mala direta por e-mail e WhatsApp, em lotes com intervalo e horário controlados." actions={<><Link href="/marketing/configuracao" className="btn">Configurações de envio</Link><Link href="/marketing/campanhas/nova" className="btn btn-primary">Nova campanha</Link></>} />
       <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
         <Section title="Campanhas">
           {list.length ? (
@@ -53,11 +50,11 @@ export default async function Campaigns() {
           ) : <Empty>Nenhuma campanha ainda. Clique em “Nova campanha”.</Empty>}
         </Section>
         <div className="space-y-5">
-          <Section title="Configuração">
-            <ul className="space-y-1 text-sm">
-              {cfg.map(([l, ok]) => <li key={l} className="flex justify-between gap-2"><span>{l}</span><span className={ok ? "badge badge-ok" : "badge badge-warn"}>{ok ? "ativo" : "pendente"}</span></li>)}
-            </ul>
-            <p className="mt-3 text-xs text-muted">As chaves ficam nas variáveis de ambiente da Vercel. O envio assistido de WhatsApp funciona sem configuração.</p>
+          <Section title={email.ready ? "E-mail: pronto para enviar ✅" : "E-mail: ainda não está pronto"} actions={<Link href="/marketing/configuracao" className="btn btn-sm">Configurar</Link>}>
+            <Checks checks={email.checks} />
+          </Section>
+          <Section title={`WhatsApp: ${wa.number}`} actions={<Link href="/marketing/whatsapp" className="btn btn-sm">Abrir</Link>}>
+            <p className="text-sm text-muted">Envio assistido disponível{wa.apiReady ? " · API oficial ativa" : " · API oficial não configurada"}.</p>
           </Section>
           <Section title="Base (LGPD)">
             <ul className="space-y-1 text-sm">
