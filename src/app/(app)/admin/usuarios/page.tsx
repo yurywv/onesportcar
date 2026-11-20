@@ -35,6 +35,21 @@ async function passwordLink(_: ActionState, fd: FormData): Promise<ActionState> 
   });
 }
 
+async function emailResetLink(_: ActionState, fd: FormData): Promise<ActionState> {
+  "use server";
+  return run(async () => {
+    const admin = await assertUser("admin:usuarios");
+    const u = await db.user.findUnique({ where: { id: String(fd.get("id")) }, select: { email: true, active: true } });
+    if (!u) throw new RuleError("Usuário não encontrado.");
+    if (!u.active) throw new RuleError("Usuário inativo — reative antes de enviar o link.");
+    const { requestStaffReset, RESET_MINUTES } = await import("@/lib/password-reset");
+    const { requestMeta } = await import("@/lib/auth");
+    const r = await requestStaffReset(u.email, await linkBase(), await requestMeta(), { id: admin.id, name: admin.name });
+    if (!r.sent) throw new RuleError(r.reason === "falha_envio" ? `Não foi possível enviar o e-mail: ${"error" in r ? r.error : ""}. Use "Gerar link" e envie por outro meio.` : "Não foi possível enviar.");
+    return `Link enviado para ${u.email} (vale ${RESET_MINUTES} minutos, uso único).`;
+  });
+}
+
 async function saveUser(_: ActionState, fd: FormData): Promise<ActionState> {
   "use server";
   return run(async () => {
@@ -99,7 +114,10 @@ export default async function Users() {
             </summary>
             <div className="space-y-3 border-t border-line p-4">
               {form(u)}
-              <ActionForm action={passwordLink}><input type="hidden" name="id" value={u.id} /><Submit className="btn btn-sm">Gerar link para o usuário definir a senha</Submit></ActionForm>
+              <div className="flex flex-wrap gap-2">
+                <ActionForm action={emailResetLink}><input type="hidden" name="id" value={u.id} /><Submit className="btn btn-sm btn-primary">Enviar link de nova senha por e-mail (15 min)</Submit></ActionForm>
+                <ActionForm action={passwordLink}><input type="hidden" name="id" value={u.id} /><Submit className="btn btn-sm">Gerar link para enviar por outro meio (48 h)</Submit></ActionForm>
+              </div>
             </div>
           </details>
         ))}

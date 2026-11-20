@@ -16,7 +16,8 @@ export default async function PortalLogin() {
         <label className="block"><span className="label">Senha</span><input name="password" type="password" className="input" autoComplete="current-password" required /></label>
         <Submit className="btn btn-primary w-full">Entrar</Submit>
       </ActionForm>
-      <p className="mt-4 text-center text-xs text-muted">Primeiro acesso ou esqueceu a senha? Peça o link de acesso à recepção da OneSportCar.</p>
+      <p className="mt-4 text-center text-sm"><a href="/cliente/esqueci-senha" className="link">Esqueci minha senha</a></p>
+      <p className="mt-2 text-center text-xs text-muted">Primeiro acesso? Peça o convite à recepção da OneSportCar.</p>
     </div>
   );
 }

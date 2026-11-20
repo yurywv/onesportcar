@@ -11,10 +11,10 @@ export function checkPasswordStrength(p: string) {
 }
 
 /** Gera link de uso único (48 h) para o usuário definir a própria senha. Links anteriores deixam de valer. */
-export async function createPasswordToken(tx: Tx, userId: string, purpose: "PRIMEIRO_ACESSO" | "REDEFINICAO", createdById?: string) {
+export async function createPasswordToken(tx: Tx, userId: string, purpose: "PRIMEIRO_ACESSO" | "REDEFINICAO" | "REDEFINICAO_EMAIL", createdById?: string, minutes = HOURS * 60) {
   await tx.passwordToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } });
   const token = randomBytes(32).toString("base64url");
-  await tx.passwordToken.create({ data: { userId, purpose, tokenHash: sha256(token), expiresAt: new Date(Date.now() + HOURS * 3600_000), createdById } });
+  await tx.passwordToken.create({ data: { userId, purpose, tokenHash: sha256(token), expiresAt: new Date(Date.now() + minutes * 60_000), createdById } });
   return token;
 }
 

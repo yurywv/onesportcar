@@ -126,3 +126,10 @@ Migration `historico_proprietarios` (aplicada no build). Testes: 35 passando.
 - LGPD: link de descadastro em todo e-mail + descadastro "um clique" do Gmail/Outlook (List-Unsubscribe); descadastrados nunca entram em campanhas; no WhatsApp assistido, botão "Pediu para sair".
 - Disparo: enquanto a tela da campanha estiver aberta (verifica a cada 30 s). O time da Vercel está no plano Hobby, que só permite cron diário; ao migrar para o Pro, basta adicionar em vercel.json `"crons": [{ "path": "/api/cron/campanhas", "schedule": "* * * * *" }]` e a variável `CRON_SECRET` para o envio seguir com a tela fechada.
 - Variáveis de ambiente: `RESEND_API_KEY`, `MAIL_FROM`, `MAIL_REPLY_TO`, `CRON_SECRET`, `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`.
+
+## Entrega 20/11/2026 — Esqueci minha senha (link por e-mail, 15 minutos)
+
+- Login da equipe e app do cliente ganharam **"Esqueci minha senha"**: o link de nova senha chega no e-mail cadastrado e vale **15 minutos**, uma única vez. Um pedido novo invalida o link anterior.
+- Proteções: a tela responde igual para e-mail cadastrado ou não; até 3 pedidos por conta e 10 por IP a cada 15 minutos; tudo registrado na auditoria.
+- Administração → Usuários: botão **"Enviar link de nova senha por e-mail (15 min)"** (o link de 48 h para enviar por outro meio continua).
+- Depende do e-mail configurado (Resend com domínio verificado). Opcional: `APP_URL` na Vercel para fixar o endereço dos links.
